@@ -95,7 +95,8 @@ Quick start
 -----------
 
 We'll do this as a lightly edited transcript of an interactive session 
-at a terminal running `bash`.
+at a terminal running `bash`. It's probably not the same as what the 
+current version would give.
 
 ~~~
 …/apl$ lua-utf8     # That's my UTF-8 enabled rebuild of Lua
@@ -104,9 +105,7 @@ Lua 5.2.1  Copyright (C) 1994-2012 Lua.org, PUC-Rio
 
    apl = require"apl"  -- load the Lua⋆APL module
 The following forward declarations were not completed
-Contents: Deal Drop Expansion IndexOf Inner MatrixDivide MatrixInverse
-    Membership Outer Print ReduceFirst ReversalFirst Rotate RotateFirst Scan
-    ScanFirst Transpose
+Contents: MatrixDivide MatrixInverse Transpose
    -- The author has lot of work still to do!
 
    help(apl)
@@ -358,7 +357,7 @@ implies that the function `f` executed when you finally evaluate
 
     - If `⍵` is not a table, it is returned unchanged by `⌷⍵`.
     - If none of the entries in `⍵` is itself a table, `⍵` is converted
-    to an APL table by setting its a metatable, and returned. No new table
+    to an APL table by setting its metatable, and returned. No new table
     is created.
     - Otherwise the entries in `⍵` must all be tables of the same length,
     and an APL matrix of which they are the columns is created.
@@ -406,3 +405,10 @@ At present, the following system variables are recognized.
     will be used to generate an appropriate format for the particular 
     value being formatted.  It is ignored if only integers need to be
     formatted. 
+
+---------------------------------------------------
+
+About this file: The Markdown dialect used is that of Pandoc.
+Although the Github display looks OK, you get even better results
+by making an HTML using Pandoc and combining it with Github's
+CSS.

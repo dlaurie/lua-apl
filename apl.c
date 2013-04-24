@@ -60,6 +60,7 @@ static int block_get(lua_State *L) {
   if (!lua_isnoneornil(L,4)) {
      count=luaL_checkint(L,4);
      inc=(count<0 ? -count : count)*inc;
+     inc = inc==0? 1 : inc;
   }
   count = (b-a)/inc+1; b=a+(count-1)*inc;
   lua_settop(L,1);

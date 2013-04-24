@@ -65,29 +65,16 @@ Lua⋆APL puts `help` into the global namespace, because that is where it needs 
 Quick start
 -----------
 
-<<<<<<< HEAD
 We'll do this as a lightly edited transcript of an interactive session at a terminal running `bash`. It's probably not the same as what the current version would give.
-=======
-We'll do this as a lightly edited transcript of an interactive session 
-at a terminal running `bash`. It's probably not the same as what the 
-current version would give.
->>>>>>> 843aa6bf5345c59638db7b35421e8e4379b20650
 
     …/apl$ lua-utf8     # That's my UTF-8 enabled rebuild of Lua
     Lua 5.2.1  Copyright (C) 1994-2012 Lua.org, PUC-Rio
     (UTF-8 version by DPL)
 
-<<<<<<< HEAD
        apl = require"apl"  -- load the Lua⋆APL module
     The following forward declarations were not completed
     Contents: MatrixDivide MatrixInverse Transpose
        -- The author has lot of work still to do!
-=======
-   apl = require"apl"  -- load the Lua⋆APL module
-The following forward declarations were not completed
-Contents: MatrixDivide MatrixInverse Transpose
-   -- The author has lot of work still to do!
->>>>>>> 843aa6bf5345c59638db7b35421e8e4379b20650
 
        help(apl)
     Contents: / _V comma equal greater less lua plus query shriek slash ×
@@ -213,7 +200,6 @@ APL expressions may contain user variables.
        =⍎'+/÷x'
     1.8333333333333
 
-<<<<<<< HEAD
 Lua⋆APL searches for these variables first in `apl._V` (or simply `_V` if you invoked `apl()`). If not found, tries the environment (i.e. `_ENV`).
 
 The names recognized inside APL expressions are more restricted than those recognized inside Lua. Only the first character may be a non-ASCII UTF-8 codepoint, and that codepoint must not be the name of an APL function.
@@ -269,98 +255,6 @@ System variables
 ----------------
 
 Variables whose names start with `⎕` are reserved for system variables, that is, APL variables on which the behaviour of certain functions may depend.
-=======
-Lua⋆APL searches for these variables first in `apl._V` (or simply
-`_V` if you invoked `apl()`). If not found, tries the environment 
-(i.e. `_ENV`).
-
-The names recognized inside APL expressions are more restricted than 
-those recognized inside Lua. Only the first character may be a 
-non-ASCII UTF-8 codepoint, and that codepoint must not be the name 
-of an APL function.
-
-For forward compatibility, it is wise not to start a name with any 
-of the currently unused symbols on the APL keyboard given above.
-
-In an APL expression, user-defined functions may be used, but they
-must already have been defined as functions at compilation time,
-whether in `_V` or in `_ENV`.
-
-~~~
-   s1=∇'f*g⍵' -- assumes f and g are non-functions
-./apl.lua:171: bad input to apl2lua: two adjacent non-functions
-f*g⍵
-   ↑
-
-   g=load''   -- a dummy function
-   s2=∇'f*g⍵' -- assumes g is a function
-   =lua(s2)   --> ⋆(g(⍵),f)  
-local ⍵,⍺=... return ⋆(g(⍵),f)
-
-   f=load''
-   s3=∇'f*g⍵' -- assumes f and g are functions 
-   =lua(s3)   --> f(⋆(g(⍵)))
-local ⍵,⍺=... return f(⋆(g(⍵)))
-~~~
-
-Note that all names used in an APL expression are non-local. That
-implies that the function `f` executed when you finally evaluate
-`s2` will be whatever value `f` has then.
-
-## Notes on specific functions
-
-`∇"APL source"`
-:   The result is always a function of two arguments, i.e. 
-    `function(...) <function body> end`. You can see the compiled
-    `<function body>` using the function `lua`. It always starts
-    with `⍵,⍺=...`.
-
-    Calling this function from inside an APL expression is less versatile:
-    the string arguments needs to have been created earlier since
-    string-valued constants are not supported inside APL expressions.
-
-`⌷(⍵)`
-:   Lua-to-APL conversion. This is not a standard APL function and will 
-    normally only be called from Lua.
-
-    - If `⍵` is not a table, it is returned unchanged by `⌷⍵`.
-    - If none of the entries in `⍵` is itself a table, `⍵` is converted
-    to an APL table by setting its metatable, and returned. No new table
-    is created.
-    - Otherwise the entries in `⍵` must all be tables of the same length,
-    and an APL matrix of which they are the columns is created.
- 
-`⍕(⍵,⍺), ⍺⍕⍵`
-:   The dyadic format uses a number as format: `12` means `%12d`, 
-    `12.6` means `%12.6f` and `¯12.6` means `%12.6e`. You can't
-    have more than 9 digits after the decimal point. An array of
-    numbers can be given: they apply term-by-term if `⍵` is a
-    vector and columnwise if `⍵` is a matrix.
-
-`⍺←⍵`
-:   The assign function `←` stores `⍵` in `apl._V` at the key `⍺`. This 
-    value takes precedence over a global Lua variable with the same name. 
-    If `⍵` is a function, the assignment is final. Any later assignment
-    with key `⍺` is an error. The reason for this is that the APL
-    compiler sees `⍺` before it sees `←` and does different things
-    depending on whether `⍺` is a function.
-
-    You can force reassignment by calling `←` from Lua: `←(⍵,⍺)`.
-
-`⍺/⍵`, `⍺⌿⍵`, `⍺\⍵`, `⍺⍀⍵`
-:   When given an empty argument `⍵`, the reduce operators return the 
-    unit of the function `⍺` e.g. `⌈/0⍴0` returns `-Inf`, or raise an
-    error if no unit is defined. The scan operators always raise an 
-    error if no unit is defined. At present only the associative dyadic
-    functions `+ − ∨ ∧ ⌈ ⌊` have units, and there is no mechanism to
-    define other units.
-
-## System variables
-
-Variables whose names start with `⎕` are reserved for system variables,
-that is, APL variables on which the behaviour of certain functions may 
-depend.
->>>>>>> 843aa6bf5345c59638db7b35421e8e4379b20650
 
 At present, the following system variables are recognized.
 
@@ -435,20 +329,4 @@ Returns `count` arguments, starting at the first extra argument. As in the case 
 
 ### `where()`
 
-<<<<<<< HEAD
 Returns a string identifying the point in the source code from which `where` is being called.
-=======
-⎕pp
-:   The number of digits appearing after the decimal point in the
-    format used by monadic `⍕` when there is no `⎕format`.  This
-    will be used to generate an appropriate format for the particular 
-    value being formatted.  It is ignored if only integers need to be
-    formatted. 
-
----------------------------------------------------
-
-About this file: The Markdown dialect used is that of Pandoc.
-Although the Github display looks OK, you get even better results
-by making an HTML using Pandoc and combining it with Github's
-CSS.
->>>>>>> 843aa6bf5345c59638db7b35421e8e4379b20650

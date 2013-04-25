@@ -54,19 +54,27 @@ static void arrayprint(lua_State *L, int from, int to) {
 
 /* get(tbl,a,b[,n]) */
 static int block_get(lua_State *L) {
-  int a=luaL_checkint(L,2), b=luaL_checkint(L,3), inc, count;
+  int a=luaL_checkint(L,2), b=luaL_checkint(L,3), count=0, force=0, inc, tf;
   luaL_checktype(L,1,LUA_TTABLE);
   inc = a<=b ? 1 : -1; 
-  if (!lua_isnoneornil(L,4)) {
-     count=luaL_checkint(L,4);
-     inc=(count<0 ? -count : count)*inc;
-     inc = inc==0? 1 : inc;
+  if (lua_type(L,4)==LUA_TNUMBER) {
+     count=lua_tointegerx(L,4,NULL); 
+     if (count>0) inc=count*inc;
+     else force=1;
   }
   count = (b-a)/inc+1; b=a+(count-1)*inc;
-  lua_settop(L,1);
+  lua_settop(L,4);
   if (!lua_checkstack(L,count)) luaL_error(
      L, "stack overflow: 'get' needs %d values",count);
-  for(;;a+=inc) { lua_rawgeti(L,1,a); if(a==b) break; } 
+  if (force) for(;;a+=inc) {
+     lua_rawgeti(L,1,a);
+     if(lua_isnil(L,-1)) lua_copy(L,4,-1); 
+     if(lua_isboolean(L,-1)) {
+        tf = lua_toboolean(L,-1); lua_pop(L,1); lua_pushinteger(L,tf);
+     }
+     if(a==b) break; 
+  } 
+  else for(;;a+=inc) { lua_rawgeti(L,1,a); if(a==b) break; } 
   return count;
 }
 

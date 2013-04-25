@@ -23,76 +23,95 @@ UTF-8 essentials
 
 There are three things, or rather four, that you must do before using the Lua⋆APL package.
 
-1.  Get a UTF-8 font with decent APL glyphs. `apl385.ttf` is recommended. On Linux systems you put it in \$HOME/.fonts and select it from your application's font selector. I'm told it is even easier on Windows systems.
+1.  Get a UTF-8 font with decent APL glyphs. `apl385.ttf` is recommended. On Linux systems you put it in `$HOME/.fonts` and select it from your application's font selector. I'm told it is even easier on Windows systems.
 
 2.  Configure an APL keyboard. I don't mean a physical APL keyboard, I mean that you must have a reasonably easy way to type APL characters, for example via the keyboard's Level-3 and Level-4 character sets, associated with the AltGr key.
 
-On systems that use X-windows you can run `xmodmap apl.xmodmap`, after of course having first backed up your present settings by `xmodmap -pke > original.xmodmap`.
+    On systems that use X-windows you can run `xmodmap apl.xmodmap`, after of course having first backed up your present settings by `xmodmap -pke > original.xmodmap`.
 
-On my keyboard, doing that produces the following layout:
+    On my keyboard, doing that produces the following layout:
 
-      ~ ⍬  ! ⌶  @ ⍫  # ⍒  $ ⍋  % ⌽  ^ ⍉  & ⊖  * ⍟  ( ⍱  ) ⍲  _    + ⌹
-      ` ⋄  1 ¨  2 ¯  3 <  4 ≤  5 =  6 ≥  7 >  8 ≠  9 ∨  0 ∧  - ×  = ÷
-      
-            Q    W    E ⍷  R    T    U    Y    I ⍸  O ⍥  P    { ⊣  } ⊢  | ⍙
-            q ∣  w ⍵  e ∊  r ⍴  t ∼  u ↓  y ↑  i ⍳  o ○  p ⋆  [ ←  ] →  \ ⍀
-      
-             A    S ⌷  D    F ≡  G ⍒  H ⍋  J ⍤  K    L ⍞  : ⍂  " ⌻
-             a ⍺  s ⌈  d ⌊  f _  g ∇  h ∆  j ∘  k    l ⎕  ; ⊢  ' ⊣ 
-      
-              Z    X    C ⍝  V    B ⍎  N ⍕  M    <    > ∵  ?
-              z ⊂  x ⊃  c ∩  v ∪  b ⊥  n ⊤  m −  , ⍪  , ⍀  / ⌿       
+          ~ ⍬  ! ⌶  @ ⍫  # ⍒  $ ⍋  % ⌽  ^ ⍉  & ⊖  * ⍟  ( ⍱  ) ⍲  _    + ⌹
+          ` ⋄  1 ¨  2 ¯  3 <  4 ≤  5 =  6 ≥  7 >  8 ≠  9 ∨  0 ∧  - ×  = ÷
 
-In each 2x2 matrix, right column requires AltGr, top row requires Shift. The four-symbol combinations should come out the same on your keyboard too, but their positions probably will not.
+                Q    W    E ⍷  R    T    U    Y    I ⍸  O ⍥  P    { ⊣  } ⊢  | ⍙
+                q ∣  w ⍵  e ∊  r ⍴  t ∼  u ↓  y ↑  i ⍳  o ○  p ⋆  [ ←  ] →  \ ⍀
 
-Some characters seem to be available on both keyboards. In fact, only `<>` are on both; AltGr `∼∧⋆−∣` may look the same but are non-ASCII. There are no commonly accepted non-ASCII alternatives for `<>+=.,!?/\`, otherwise I would have used them too.
+                 A    S ⌷  D    F ≡  G ⍒  H ⍋  J ⍤  K    L ⍞  : ⍂  " ⌻
+                 a ⍺  s ⌈  d ⌊  f _  g ∇  h ∆  j ∘  k    l ⎕  ; ⊢  ' ⊣ 
 
-1.  Rebuild your Lua so that 2-byte and 3-byte UTF-8 codepoints look like Lua names. You need to replace the original `lctype.c` file by the one supplied here and do `make linux` or `make mingw` etc again. While you are at it, you may as well redefine the prompts to give your session three-fourths of an APL look by compiling with `-DLUA_PROMPT='"   "' -DLUA_PROMPT2='"      "'`.
+                  Z    X    C ⍝  V    B ⍎  N ⍕  M    <    > ∵  ?
+                  z ⊂  x ⊃  c ∩  v ∪  b ⊥  n ⊤  m −  , ⍪  , ⍀  / ⌿       
 
-An unmodified Lua gives the following error message when `apl.lua` is loaded:
+    In each 2x2 matrix, right column requires AltGr, top row requires Shift. The four-symbol combinations should come out the same on your keyboard too, but their positions probably will not.
 
-    lua: apl.lua:3: <name> expected near char(226). 
+    Some characters seem to be available on both keyboards. In fact, only `<>` are on both; AltGr `∼∧⋆−∣` may look the same but are non-ASCII. There are no commonly accepted non-ASCII alternatives for `<>+=.,!?/\`, otherwise I would have used them too.
 
-1.  Nothing to do with UTF-8, but you must compile the module `apl_core` from `apl.c`. Instructions are given in the comments there.
+3.  Rebuild your Lua so that 2-byte and 3-byte UTF-8 codepoints look like Lua names. You need to replace the original `lctype.c` file by the one supplied here and do `make linux` or `make mingw` etc again.
 
-Interactive help
-----------------
+    An unmodified Lua gives the following error message when `apl.lua` is loaded:
 
-Lua⋆APL provides help via the interactive help system in `help.lua`. This provides most of the specific documentation. You get started with `help()`.
+    lua: apl.lua:3: <name> expected near char(226).
 
-Lua⋆APL puts `help` into the global namespace, because that is where it needs to be for interactive use. For the same reason, it is recommended that you put the APL functions in the global namespace (see how to do this below), but this is not the default.
+4.  Nothing to do with UTF-8, but you must follow the instructions are given in the comments to `apl.c` in order to get the module `apl_core`.
 
 Quick start
 -----------
 
-We'll do this as a lightly edited transcript of an interactive session at a terminal running `bash`. It's probably not the same as what the current version would give.
+We'll do this as a transcript of an interactive session at a terminal running `bash`. It's probably not the same as what the current version would give.
+
+Lua⋆APL provides interactive help. For most of the functions, that is the only documentation available. You get started with `help()` and `help(apl)`. This is the only name that Lua⋆APL puts into the global namespace by default.
+
+For the same reason, it is recommended that you put the Lua⋆APL functions in the global namespace (this is done below) but that is not the default.
 
     …/apl$ lua-utf8     # That's my UTF-8 enabled rebuild of Lua
-    Lua 5.2.1  Copyright (C) 1994-2012 Lua.org, PUC-Rio
-    (UTF-8 version by DPL)
 
        apl = require"apl"  -- load the Lua⋆APL module
     The following forward declarations were not completed
-    Contents: MatrixDivide MatrixInverse Transpose
-       -- The author has lot of work still to do!
+    Contents: MatrixDivide MatrixInverse
+    WARNING: Not all functions that should respect shape do so yet.
 
-       help(apl)
-    Contents: / _V comma equal greater less lua plus query shriek slash ×
-        ÷ ← ↑ ∇ − ∣ ∧ ∨ ∼ ≠ ≤ ≥ ⊤ ⊥ ⋆ ⌈ ⌊ ⌽ ⍋ ⍎ ⍒ ⍕ ⍟ ⍱ ⍲ ⍳ ⍴ ○
+       help(apl) -- help(tbl) lists all the keys of the table
+    Contents: / \ _V backslash comma dot equal greater less lua plus query
+        shriek slash × ÷ ← ↑ ↓ ∇ ∊ − ∘ ∣ ∧ ∨ ∼ ≠ ≤
+        ≥ ⊖ ⊤ ⊥ ⋆ ⌈ ⌊ ⌷ ⌽ ⌿ ⍀ ⍉ ⍋ ⍎ ⍒ ⍕ ⍟ ⍪ ⍱ ⍲ ⍳ ⍴ ○
 
-       apl() -- loads all of the above into the global namespace
+       apl()  -- loads all of the above into the global namespace
 
-       help(⍳)
-    IndexGenerator: ⍵ → {1,2,...,⍵}
+       help"⍳" -- this is the preferred way to get help
+    1. IndexGenerator: ⍳⍵ → {1,2,...,⍵}
+    2. ⍺⍳⍵ → position of first occurrence of ⍺ in ⍵
 
-       help(∇)
+       help"∇" -- but it is not always available
+    No help available, try help(∇).
+
+       help(∇) -- in which case this alternative should work
     Define: return APL expression compiled as a Lua function
 
-       sum=∇"+/⍵"
-       =sum(⍳(10))  -- This is Lua syntax for calling an APL function
+       n=10 -- names in the global Lua namespace are visible to APL code
+
+       print(⍎"(n,n)⍴(n+1)↑1") -- this is how to run a piece of APL code
+    1 0 0 0 0 0 0 0 0 0
+    0 1 0 0 0 0 0 0 0 0
+    0 0 1 0 0 0 0 0 0 0
+    0 0 0 1 0 0 0 0 0 0
+    0 0 0 0 1 0 0 0 0 0
+    0 0 0 0 0 1 0 0 0 0
+    0 0 0 0 0 0 1 0 0 0
+    0 0 0 0 0 0 0 1 0 0
+    0 0 0 0 0 0 0 0 1 0
+    0 0 0 0 0 0 0 0 0 1
+
+       sum=∇"+/⍵" -- this is how to load a function coded in APL
+
+       print(lua(sum))    -- The actual Lua code to which `∇"+/⍵"` translates.
+    local ⍵,⍺=... return slash(plus)(⍵)
+
+       print(sum(⍳(10)))  -- Executing built-in APL functions via Lua syntax
     55
-       =lua(sum)    -- The actual Lua code to which `∇"+/⍵"` translates. 
-    local ⍵,⍺=... return slash(⍵,plus)
+
+       print(⍎"sum ⍳10")  -- Executing built-in APL functions via APL syntax
+    55
 
 General design
 --------------
@@ -103,7 +122,7 @@ In some cases, the one-character name is an ASCII character, e.g. `+`. These hav
 
 The functions do what one could expect the corresponding APL functions to do, except that the values they act on are Lua values: numbers, strings, tables and functions. They all take one or two arguments, traditionally called ⍺ and ⍵, and return one value.
 
-Although an APL reference manual would help (e.g. `APlusRefV2_8.html` as installed by the `aplus-fsf-doc` package) there is no attempt to reproduce exact behaviour of any existing APL implememtation. *The definition of the function is what it says in the interactive help for it,* which often is simply its Lua code.
+Although an APL reference manual would help (e.g. `APlusRefV2_8.html` as installed by the `aplus-fsf-doc` package) there is no attempt to reproduce the exact behaviour of any existing APL implememtation. *The definition of the function is what it says in the interactive help for it,* which often is simply its Lua code.
 
 There are two kinds of help:
 
@@ -115,26 +134,62 @@ The first kind is always available, but is not always very informative.
     help(plus)
        apl[name] = function(⍵,⍺) return (⍺ and f2(⍵,⍺)) or f1(⍵) end
 
-`help(plus)` is the as same `help(×)` and many others. All it says is that `plus` can be used monadically, when `f1` is invoked, or dyadically, when `f2` is invoked.
+`help(plus)` is the as same `help(×)` and many others. All it says is that `plus` can be used monadically, when `f1` is invoked, or dyadically, when `f2` is invoked. It does not even tell you what `f1` and `f2` are.
 
-The second kind is not always available, but when it is, it is more informative than the first: it tells you what `f1` and `f2` are.
+The second kind is not always available, but when it is, it is more informative than the first.
 
        help'plus'
     1. Identity = function(⍵) return ⍵ end
     2. Add = function(⍵,⍺) return ⍺+⍵ end
 
-APL types
----------
+APL types vs Lua types
+----------------------
 
-APL works with numbers and characters, which may be either scalar or organized as a one-dimensional vector or a two-dimensional matrix. Lua⋆APL maps numbers to Lua numbers, and vectors and matrices to origin-1 Lua tables, which we will refer to as "arrays".
+From here onwards, "APL" will mean "the dialect of APL supported by Lua⋆APL".
 
-Lua strings are treated as scalars. APL-style characters and character matrices are not supported, and the use of string-valued arguments to any APL function except `⍎` and `⍕` does not form part of the design of Lua⋆APL. The coherence of both APL and Lua is so good that useful results may well in some cases be obtained from string arguments, but that kind of usage is unsupported.
+APL recognizes four types: functions, scalars, vectors and matrices. These are accommodated directly in Lua types as follows:
 
-Just like the Lua table library, Lua⋆APL relies on the built-in `#` function to give the length of arrays.
+-   APL scalars are Lua numbers or strings. Most APL functions do not distinguish these in cases where Lua would not, e.g. `×('3','4')` will happily return the number `12`.
 
-All APL functions accept any Lua array, but return APL arrays. The only difference is that APL arrays have a metatable, which defines a `tostring` function reminiscent of how APL implementations print arrays, and metamethods for the arithmetic operations and concatenation. Arrays passed to APL functions may on return be found to have acquired this metatable. It is not considered to be a bug when this happens.
+-   APL functions are Lua functions.
 
-APL matrices differ from APL vectors in having a `shape` field. The presence of this field influences the behaviour of many functions, most of which however have not been implemented at this stage. The shape is a two-element vector giving the number of rows and columns in the matrix.
+-   APL vectors are origin-1 Lua tables. There should be no holes, i.e. positive integer indices for which `tbl[k]==nil` but `tbl[k+1]~=nil`.
+
+-   APL matrices are origin-1 Lua tables like APL vectors, but have a field `shape` which contains a table with two numbers, the number of rows and columns.
+
+Mapping from Lua to APL is done by the squish function, e.g. `⌷{{1,2,3},{4,5,6}}` creates a matrix.
+
+### Booleans
+
+APL has no Boolean type. APL comparison and logical functions return 0 or 1, *both of which are `true` to Lua*. The squish function `⌷` converts Booleans to 0-1 values.
+
+### Nil
+
+APL does not have a concept of `nil`. The squish function `⌷` converts nils to `NaN`, which has the type `"number"` even though it is not-a-number. All arithmetic operations involving `NaN` have result `NaN`; all APL comparison operations involving `NaN` have result `0`, even `NaN==NaN`.
+
+### Strings
+
+Lua strings are treated as scalars. APL-style characters and character matrices are not supported, and the use of string-valued arguments to any APL function except `⍎` and `⍕` does not form part of the design of Lua⋆APL. The coherence of both APL and Lua is so good that useful results may well in some cases be obtained from string arguments, but that kind of usage is at this stage an unsupported lucky coincidence.
+
+### Tables
+
+Like the Lua table library, APL relies internally on the built-in `#` function to give the length of arrays. If you create all your APL tables via buit-in APL functions, including `⌷`, this should not be a problem. If an APL function ever returns an array with a hole, it is a bug that I would like to be informed of.
+
+All APL functions accept any Lua array, but returned array are APL arrays. The only difference is that APL arrays have a metatable, which defines a `tostring` function reminiscent of how APL implementations print arrays, and metamethods for the arithmetic operations and concatenation. Arrays passed to APL functions may on return be found to have acquired this metatable. It is not considered to be a bug when this happens.
+
+APL matrices differ from APL vectors in having a `shape` field. The presence of this field influences the behaviour of many functions, most of which however have not been implemented at this stage. The shape is a two-element vector giving the number of rows and columns respectively.
+
+### Functions
+
+Any Lua function is a valid APL function too. However, there are a few things to bear in mind.
+
+-   Make sure that your return values are valid APL values, for example by passing them through the squish function `⌷`.
+
+-   APL thinks of all functions as having the header `function(⍵)` or `function(⍵,⍺)` and returning one value. It can deduce from the syntax whether a function is called monadically or dyadically.
+
+### Other Lua types
+
+All other types are considered to be scalars, and the chance that APL can use them sensibly is remote. However, you may be programmming in a mixture of Lua and APL, using APL as a sort of greatly extended table library. If you keep them as values in tables with keys not recognized by APL, there should not be a problem.
 
 Using the functions directly from Lua
 -------------------------------------
@@ -236,12 +291,16 @@ Calling this function from inside an APL expression is less versatile: the strin
 `⌷(⍵)`  
 Lua-to-APL conversion. This is not a standard APL function and will normally only be called from Lua.
 
--   If `⍵` is not a table, it is returned unchanged by `⌷⍵`.
+-   If `⍵` is nil, it is replaced by `NaN`.
+-   If `⍵` is boolean, it is replaced by a 0-1 value.
+-   If `⍵` is any other scalar, it is returned unchanged by `⌷⍵`.
 -   If none of the entries in `⍵` is itself a table, `⍵` is converted to an APL table by setting its metatable, and returned. No new table is created.
 -   Otherwise the entries in `⍵` must all be tables of the same length, and an APL matrix of which they are the columns is created.
 
 `⍕(⍵,⍺), ⍺⍕⍵`  
-The dyadic format uses a number as format: `12` means `%12d`, `12.6` means `%12.6f` and `¯12.6` means `%12.6e`. You can't have more than 9 digits after the decimal point. An array of numbers can be given: they apply term-by-term if `⍵` is a vector and columnwise if `⍵` is a matrix.
+The dyadic format function uses a number as format: `12` means `%12d`, `12.6` means `%12.6f` and `¯12.6` means `%12.6e`. You can't have more than 9 digits after the decimal point. An array of numbers can be given: they apply term-by-term if `⍵` is a vector and columnwise if `⍵` is a matrix.
+
+You can also supply a string-valued format or array of formats.
 
 `⍺←⍵`  
 The assign function `←` stores `⍵` in `apl._V` at the key `⍺`. This value takes precedence over a global Lua variable with the same name. If `⍵` is a function, the assignment is final. Any later assignment with key `⍺` is an error. The reason for this is that the APL compiler sees `⍺` before it sees `←` and does different things depending on whether `⍺` is a function.
@@ -280,7 +339,7 @@ Block functions all have a table and two integers as their first three arguments
 
 ### `get(tbl,a,b[,inc])`
 
-If `inc` is omitted or `abs(inc)==1`, returns `tbl[a:b]`. Otherwise goes in steps of `abs(inc)`. This function may cause stack overflow if too many items are requested.
+If `inc` is omitted or `inc==1`, returns `tbl[a:b]`. If `inc` is a positive integer, does this in steps of `inc`. Otherwise, replaces booleans by 0-1 values and nils by `inc` (`inc=0/0`, i.e. NaN, is recommended). This function may cause stack overflow if too many items are requested.
 
 * * * * *
 
@@ -310,7 +369,7 @@ If the vararg list is empty (not even containing `nil`), stores nothing. The lis
 
 Stores the transpose of `tbl[1:a*b]` in `target[1:a*b]` and also returns it. `tbl` is assumed to contain `a` blocks of `b` elements, and `target` will contain `b` blocks of `a` elements.
 
-`tbl` and `target` may not be the same array.
+`tbl` and `target` are not allowed to be the same array.
 
 * * * * *
 

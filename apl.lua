@@ -8,8 +8,8 @@ if ⍺ then end -- in order to diagnose whether UTF-8 codepoints are names
 -- Dependencies
 
 local core = require"apl_core"
-local  get,      move,      map,      where,      transpose = 
-  core.get, core.move, core.map, core.where, core.transpose
+local  get,      move,      map,      where,      transpose,      trisect
+= core.get, core.move, core.map, core.where, core.transpose, core.trisect
 local set = function(t,...) core.set(t,...) return t end
 
 help = require"help"
@@ -20,11 +20,10 @@ local random, concat, unpack = math.random, table.concat, table.unpack
 
 -- This is kept in while the program is under development
 
-local orig_ENV=_ENV
+local meta_ENV=getmetatable(_ENV)
 setmetatable(_ENV,{__newindex = function (ENV,name,value)
-   local w=where(2)
-   if name:match"^%a%d?$" then 
-      print(w.."A global name like '"..name.."' is asking for trouble.")
+   if name:match"^%a%d?$" then print(where(2)..
+      "A global name like '"..name.."' is asking for trouble.")
    end
    rawset(ENV,name,value)
 end})
@@ -69,35 +68,40 @@ local First, Invert, Map
 -- -----------------------------------------------------------------
 -- Auxiliary functions
 
-local argcheck = function(cond,pos,fct,msg)
+local argcheck, arr, checktype, is, is_int, is_not, qsort3, sort, utflen
+
+argcheck = function(cond,pos,fct,msg)
    if not cond then
       error(("bad argument "..pos.." to %s: %s"):format(fct,msg))   
    end
 end
 
-local arr = function(a) return setmetatable(a,apl_meta) end
+arr = function(⍵)
+--- Make ⍵ into an APL array 
+   if not is"table"(⍵) then ⍵={⍵} end
+   return setmetatable(⍵,apl_meta) 
+end
 
-local checktype = function(val,typ,pos,fct)
+checktype = function(val,typ,pos,fct)
    if type(val)~=typ then 
       error(("bad argument "..pos.." to %s: expected %s, got %s"):format
             (fct,typ,type(val)))   
    end
 end
 
-local function is(typ) return function(x) return type(x)==typ end end
-local function is_int(x) return is"number"(x) and x==Floor(x) end
-local function is_not(typ) return function(x) return type(x)~=typ end end
+is = function(typ) return function(x) return type(x)==typ end end
+is_int = function(x) return is"number"(x) and not (x>Floor(x)) end
+is_not = function(typ) return function(x) return type(x)~=typ end end
 
-local qsort3
 qsort3 = function (tbl,cmp,first,last,p)
   if last<=first then return end
-  local i,j = core.trisect(tbl,first,last,tbl[random(first,last)],cmp,p)
+  local i,j = trisect(tbl,first,last,tbl[random(first,last)],cmp,p)
   qsort3(tbl,cmp,first,i,p)
   qsort3(p,nil,i+1,j-1,tbl)
   qsort3(tbl,cmp,j,last,p)
 end 
 
-local sort = function(tbl,cmp,first,last)
+sort = function(tbl,cmp,first,last)
   first=first or 1; last=last or #tbl
   local invert=last<first
   if invert then 
@@ -114,7 +118,7 @@ local sort = function(tbl,cmp,first,last)
   return p
 end
 
-local function utflen(s)
+utflen = function(s)
    return #s:gsub("[\xC0-\xEF][\x80-\xBF]*",'.')
 end
 
@@ -127,7 +131,6 @@ Invert = function(⍵)
    for k,v in ipairs(⍵) do t[v]=k end 
    return t
 end
-
 
 Map = function(ft,tbl) return arr(map(tbl,1,#tbl,ft,{})) end
 --- Applies ft to every element of tbl. ft may be a function or a table.
@@ -197,29 +200,29 @@ And = function(⍵,⍺) return ⍵~=0 and ⍺~=0 and 1 or 0 end
 Assign = function(⍵,⍺) _APL[⍺]=⍵ return ⍵ end
 
 Attach = function(⍵,⍺)
+   local ⍴⍺,⍴⍵ = Shape(⍺),Shape(⍵)
+   if #⍴⍺>1 or #⍴⍵>1 then 
+      return Transpose(AttachFirst(Transpose(⍵),Transpose(⍺)))
+   end
    ⍺=Ravel(⍺)
-   if is_not"table"(⍵) then ⍺[#⍺+1]=⍵ else set(⍺,#⍺+1,nil,get(⍵,1,#⍵)) end
+   if #⍴⍵<1 then ⍺[#⍺+1]=⍵ else set(⍺,#⍺+1,nil,get(⍵,1,#⍵)) end
    return ⍺
 end
 help(Attach,"Attach: ⍺,⍵ → elements of ⍺ followed by elements of ⍵")
 
 AttachFirst = function(⍵,⍺)
-   top, bottom = Ravel(⍺), Ravel(⍵)
-   local cols = function(x) 
-      return  x.shape and x.shape[2]  or  is"table"(x) and #x  or  1
-   end
-   local rows = function(x) 
-      return  x.shape and x.shape[1]  or  1
-   end
-   local n=cols(⍺)
-   argcheck(cols(⍵)==n,2,'AttachFirst','Rows must be of equal length')
-   set(top,#top+1,nil,get(bottom,1,#bottom))
-   top.shape = arr{rows(⍺)+rows(⍵),n}
-   return top
+   local ⍴⍺,⍴⍵ = Shape(⍺),Shape(⍵)
+   ⍴⍺ = ⍴⍺.shape or {1,⍴⍺[1] or 1}
+   ⍴⍵ = ⍴⍵.shape or {1,⍴⍵[1] or 1}
+   argcheck(⍴⍺[2]==⍴⍵[2],2,'AttachFirst','Rows must be of equal length')
+   ⍺,⍵ = Clone(arr(⍺)),arr(⍵)
+   set(⍺,#⍺+1,nil,get(⍵,1,#⍵))
+   ⍺.shape = arr{⍴⍺[1]+⍴⍵[1],⍴⍺[2]}
+   return ⍺
 end   
 help(AttachFirst,[[
-AttachFirst: ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
-   Scalars and vectors are turned into rows.]])
+AttachFirst: ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵.
+   Vectors are treated as one-row matrices.]])
 
 Binomial = function(⍵,⍺) 
    ⍺=min(⍺,⍵-⍺)
@@ -246,7 +249,7 @@ Compress = function(⍵,⍺)
    end end
    return t
 end
-CompressFirst = Compress  -- will change when shape is implemented
+CompressFirst = function(⍵,⍺) return Transpose(Compress(Transpose(⍵),⍺)) end
 
 Deal = function(⍵,⍺)
    argcheck(⍺<=⍵,'pair','Deal',"can't deal "..⍺.." from "..⍵)
@@ -326,7 +329,7 @@ Expand = function(⍵,⍺)
    end
    return t
 end
-ExpandFirst = Expand  -- will change when shape is implemented
+ExpandFirst = function(⍵,⍺) return Transpose(Expand(Transpose(⍵),⍺)) end
    
 Exponential = math.exp; help(Exponential,"⍵ → math.exp(⍵)")
 Factorial = function(⍵) local f=1; for k=2,⍵ do f=f*k end; return f end
@@ -393,6 +396,7 @@ Logarithm = math.log; helptext.⍟="⍺⍟⍵ → math.log(⍵,⍺)"
 Maximum = math.max; help(Maximum,"⍺⌈⍵ → math.max(⍵,⍺)")
 Minimum = math.min; help(Minimum,"⍺⌊⍵ → math.min(⍵,⍺)")
 Multiply = function(⍵,⍺) return ⍺*⍵ end 
+NaN = 0/0; helptext.NaN = "NaN: Not-a-Number (whose type is 'number')"
 Nand = function(⍵,⍺) return ⍵~=0 and ⍺~=0 and 0 or 1 end
 Negate = function(⍵) return -⍵ end
 Nor = function(⍵,⍺) return (⍵~=0 or ⍺~=0) and 0 or 1 end
@@ -470,36 +474,40 @@ help(RotateFirst,
 Shape = function(⍵) 
    if is"table"(⍵) then
       if ⍵.shape then return ⍵.shape else return arr{#⍵} end
-   elseif is"string"(⍵) then return #⍵
-   else return arr{}
+   elseif is"number"(⍵) then return arr{}
+   else return #⍵
    end
 end
 help(Shape,[[
-Shape: ⍴⍵ → #⍵ if a vector, nil if a scalar, {rows,cols} if a matrix]])
+Shape: ⍴⍵ → {} if a number, {#⍵} if a vector, {rows,cols} if a matrix.
+       #⍵ if none of the above.]])
 
 Signum = function(⍵) return ⍵<0 and -1 or ⍵>0 and 1 or 0 end 
 
 Squish = function(⍵) 
-   if is_not"table"(⍵) then return ⍵ end
-   local j=First(is'table',⍵) 
-   if not j then return arr(⍵) end
-   local m,n=#⍵[j],#⍵
+   if is_not"table"(⍵) then return get({⍵},1,1,NaN) end
+   local j,n = First(is'table',⍵),#⍵ 
+   if not j then return arr{get(⍵,1,n,NaN)} end
+   local m=#⍵[j]
    local culprit = First(is_not'table',⍵)
          or First(function(x) return #x~=m end,⍵)
    if culprit then argcheck(false,'⍵','Squish',
       'column '..culprit..' and column '..j..' have different length')
    end
    local s,j = arr{shape={n,m}},0
-   for i=1,n do set(s,j+1,j+m,get(⍵[i],1,m)); j=j+m end
+   for i=1,n do set(s,j+1,j+m,get(⍵[i],1,m,NaN)); j=j+m end
    return Transpose(s)
 end
 helptext.⌷=[[
-Squish: ⌷⍵ → APL array with the same elements as ⍵
-   Matrix is given by supplying columns. Scalars returned unchanged.]]
+Squish: ⌷⍵ → APL array with the same elements as ⍵.
+   Matrices are given by supplying columns. 
+   Booleans are converted to 0-1, Nil to NaN.
+   Other scalars are returned unchanged.]]
 
 Subtract = function(⍵,⍺) return ⍺-⍵ end
     
 Take = function(⍵,⍺)
+   if not is"table"(⍵) then ⍵={⍵} end
    local len,given,t = abs(⍺),#⍵,arr{}
    if len<1 then return t end
    set(t,1,len,0)
@@ -582,32 +590,40 @@ ScanFirst = Scan  -- will change when shape is implemented
 
 -- Format
 
-local function aplformat(f)
-   return '%'..("%.1f"):format(abs(f))..(f<0 and 'e' or 'f')   
-end
-local function defaultformat(⍵)
-   local ⎕pp = _APL.⎕pp or 5
-   if is_not"table"(⍵) then 
-      if is_int(⍵) then return "%d" else return "%."..⎕pp.."f" end
-   end
-   local function S(x) if x<0 then x=10*abs(x) end; return x end
-   local mx=0
-   local nonint=First(function(x) return not is_int(x) end,⍵)
-   if not ⍵.shape then return nonint and "%."..⎕pp.."f" or "%d" end
-   for k,v in ipairs(⍵) do 
-      if nonint then mx=Maximum(mx,#("%."..⎕pp.."f"):format(S(v)))
-      else mx=Maximum(mx,#("%d"):format(v)) 
+local function sizer(x) if x<0 then x=10*abs(x) end; return x end
+local function defaultformat(⍵)   
+   if ⍵==nil then return "%s" end
+   local fmt
+   local ⎕pp = _APL.⎕pp or 5  
+   if is"table"(⍵) then 
+      if First(function(x) return not x==x end,⍵) then -- NaN found
+          return "%s"
       end
+      local nonint=First(function(x) return not is_int(x) end,⍵)
+      local mx=-Inf
+      for k,v in ipairs(⍵) do 
+         if nonint then mx=Maximum(mx,#("%."..⎕pp.."f"):format(sizer(v)))
+         else mx=Maximum(mx,#("%d"):format(v)) 
+      end end
+      return "%"..mx..(nonint and '.'..⎕pp..'f' or 'd')
    end
-   return "%"..mx..(nonint and '.'..⎕pp..'f' or 'd')
+   if is_int(⍵) then return "%d" else return "%."..⎕pp.."f" end
+end
+local function aplformat(f)
+--- convert APL format to string format
+   if f==nil then return defaultformat()
+   elseif is"string"(f) then return(f)
+   elseif is"number"(f) then 
+      return '%'..("%.1f"):format(abs(f))..(f<0 and 'e' or 'f')
+   elseif is"table"(f) then return Map(aplformat,f)
+   else checktype(f,'number',1)
+   end      
 end
 
 Format = function(⍵,⍺)    
+   if ⍵==nil then return aplformat(⍺) end
    if is"string"(⍵) then return ⍵ end
-   if is"table"(⍺) then ⍺=Map(aplformat,⍺) 
-   else       
-      ⍺ = (⍺ and aplformat(⍺)) or _APL.⎕format or defaultformat(⍵)
-   end
+   ⍺ = (⍺ and aplformat(⍺)) or _APL.⎕format or defaultformat(⍵)
    if is"table"(⍵) then
       local f={}
       if is"string"(⍺) then for k,v in ipairs(⍵) do 
@@ -624,11 +640,17 @@ Format = function(⍵,⍺)
          return concat(r,'\n')
       else return concat(f,' ')
       end
+   elseif is"table"(⍺) then 
+      return concat(Map(function(f) return f:format(⍵) end,⍺))
    else return ⍺:format(⍵)     
    end
 end 
-helptext.⍕ = 
-"1. ⍵ → tostring(⍵)\n2. ⍺⍕⍵, ⍺='width.decimals', negative for e-format" 
+helptext.⍕ = [[
+1. ⍵ → tostring(⍵)
+2. ⍺⍕⍵, ⍺='width.decimals', negative for e-format
+   Or supply actual Lua format as a string.
+   Vector-valued formats apply columnwise.
+]]
 apl_meta.__tostring = Format       
 
 -- ----------- end of named APL functions -------------------
@@ -917,6 +939,7 @@ end
 
 -- Direct equivalence
 
+apl.NaN = NaN
 apl.← = Assign
 apl.⊤ = Decode
 apl.∇ = Define
@@ -966,6 +989,7 @@ help = function(s,...)
 -- string: Prints help on the topic, if any; otherwise if name of an
 --    APL function, help on its monadic and dyadic usage.
 -- "all": Prints available topics. 
+   if not(s==s) then print(helptext.NaN) return end
    if helptext[s] then print(helptext[s]) return end 
    if APL[s] and select('#',...)==0 then 
       for a=1,2 do if APL[s][a] then 
@@ -997,7 +1021,7 @@ for k in ([[
 ]]):gmatch"%u%w*" do if not locals[k] then missing[k]=true end end 
 print"The following forward declarations were not completed"
 help(missing)
-print"WARNING: No current function except ⍴ and ⍕ respects shape."
+print"WARNING: Not all functions that should respect shape do so yet."
 
 apl._V = setmetatable(_APL,{__index=_ENV})
 apl.lua = function(⍵)
@@ -1026,12 +1050,19 @@ __call =
       end end
    end})
 
--- setmetatable(_ENV,orig_ENV)
+setmetatable(_ENV,meta_ENV)
 return apl
 
 --[[ BUGS
 Not supported:
-  shape
+  domino function
   indexing
+Not matrix-aware yet: Expand, Compress, Inner, Outer
+  APL array could include information "apply row-wise", "apply columnwise"
+  to ⍺ and to ⍵. 
 Not enough runtime checks on input values.
+Format bugs
+  support for strings and matrices still sketchy 
+  NaN in a matrix
+  could do with a rethink, actually
 --]]

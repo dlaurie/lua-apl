@@ -52,29 +52,17 @@ static void arrayprint(lua_State *L, int from, int to) {
 #define swap(a,x,y) lua_rawgeti(L,a,x); lua_rawgeti(L,a,y); \
   lua_rawseti(L,a,x); lua_rawseti(L,a,y); 
 
-/* get(tbl,a,b[,n]) */
+/* get(tbl,a,b) */
+/* block.get(tbl,a,b) */
 static int block_get(lua_State *L) {
-  int a=luaL_checkint(L,2), b=luaL_checkint(L,3), count=0, force=0, inc, tf;
+  int a=luaL_checkint(L,2), b=luaL_checkint(L,3), inc, count;
   luaL_checktype(L,1,LUA_TTABLE);
   inc = a<=b ? 1 : -1; 
-  if (lua_type(L,4)==LUA_TNUMBER) {
-     count=lua_tointegerx(L,4,NULL); 
-     if (count>0) inc=count*inc;
-     else force=1;
-  }
-  count = (b-a)/inc+1; b=a+(count-1)*inc;
-  lua_settop(L,4);
+  count = (b-a)*inc+1;
+  lua_settop(L,1);
   if (!lua_checkstack(L,count)) luaL_error(
      L, "stack overflow: 'get' needs %d values",count);
-  if (force) for(;;a+=inc) {
-     lua_rawgeti(L,1,a);
-     if(lua_isnil(L,-1)) lua_copy(L,4,-1); 
-     if(lua_isboolean(L,-1)) {
-        tf = lua_toboolean(L,-1); lua_pop(L,1); lua_pushinteger(L,tf);
-     }
-     if(a==b) break; 
-  } 
-  else for(;;a+=inc) { lua_rawgeti(L,1,a); if(a==b) break; } 
+  for(;;a+=inc) { lua_rawgeti(L,1,a); if(a==b) break; } 
   return count;
 }
 
@@ -131,29 +119,26 @@ static int block_transpose(lua_State *L) {
    return 1;
 }
 
-/* map(tbl,a,b,table_or_monadic_function[,target]) */
-static void block_call(lua_State *L,int a,int b) {
-  int i;
-  for (i=a; i<=b; i++) {
-    lua_pushvalue(L,4); lua_rawgeti(L,1,i); lua_call(L,1,1); 
-    lua_rawseti(L,5,i);
+/* map(table_or_monadic_function,...) */
+static void tuple_call(lua_State *L) {
+  int i, top=lua_gettop(L);
+  for (i=2; i<=top; i++) {
+    lua_pushvalue(L,1); lua_pushvalue(L,i); lua_call(L,1,1); 
+    lua_replace(L,i);
   }
 }
-static void block_index(lua_State *L,int a,int b) {
-  int i;
-  for (i=a; i<=b; i++) {
-    lua_rawgeti(L,1,i); lua_gettable(L,4); lua_rawseti(L,5,i);
+static void tuple_index(lua_State *L) {
+  int i, top=lua_gettop(L);
+  for (i=2; i<=top; i++) {
+    lua_pushvalue(L,i); lua_gettable(L,1); 
+    lua_replace(L,i); 
   }
 }
-static int block_map(lua_State *L) {
-  int i, a=luaL_checkint(L,2), b=luaL_checkint(L,3);
-  luaL_checktype(L,1,LUA_TTABLE);
-  luaL_checktype(L,5,LUA_TTABLE);
-  lua_settop(L,5);
-  if (lua_type(L,4)==LUA_TFUNCTION) block_call(L,a,b);
-  else if (lua_type(L,4)==LUA_TTABLE) block_index(L,a,b);
-  else return 0;
-  return 1; 
+static int tuple_map(lua_State *L) {
+  if (lua_type(L,1)==LUA_TFUNCTION) tuple_call(L);
+  else if  (lua_type(L,1)==LUA_TTABLE) tuple_index(L);
+  else return 0; 
+  return lua_gettop(L)-1; 
 }
 
 /* pick(tbl,a,b,fct[,count]) */
@@ -245,8 +230,8 @@ static const luaL_Reg funcs[] = {
   {"move", block_move},
   {"transpose", block_transpose},
   {"trisect",block_trisect},
-  {"map", block_map},
   {"pick", block_pick},
+  {"map", tuple_map},
   {"keep", tuple_keep},
   {"where", lua_where},
   {NULL, NULL}

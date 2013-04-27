@@ -8,15 +8,15 @@ Lua⋆APL is a module of Lua functions with APL names, by and large doing what t
 Contents
 --------
 
-    apl.lua     -- Returns the module table
-    help.lua    -- Returns the required module 'help'
-    test.lua    -- Tests a large selection of features
-    apl385.ttf  -- A public-domain APL font by Adrian Smith
-    apl.xmodmap -- APL key mappings for X
-    README.md   -- This file
-    apl.c       -- Supporting routines in C 
-    lctype.c    -- Modified from the Lua source in order to provide
-                   support for URF-8 names
+    apl.lua         -- Returns the module table
+    help.lua        -- Returns the required module 'help'
+    test.lua        -- Tests a large selection of features
+    apl385.ttf      -- A public-domain APL font by Adrian Smith
+    lua-apl.xmodmap -- APL key mappings for X
+    README.md       -- This file
+    apl.c           -- Supporting routines in C 
+    lctype.c        -- Modified Lua kernel source providing support for 
+                       UTF-8 characters in Lua names
 
 UTF-8 essentials
 ----------------
@@ -293,7 +293,8 @@ Lua-to-APL conversion. This is not a standard APL function and will normally onl
 
 -   If `⍵` is nil, it is replaced by `NaN`.
 -   If `⍵` is boolean, it is replaced by a 0-1 value.
--   If `⍵` is any other scalar, it is returned unchanged by `⌷⍵`.
+-   If `⍵` is a string, it is converted to an array of byte values.
+-   If `⍵` is any other scalar, it is returned unchanged by `⌷⍵`. This is unlikely to be useful except in the case of a number.
 -   If none of the entries in `⍵` is itself a table, `⍵` is converted to an APL table by setting its metatable, and returned. No new table is created.
 -   Otherwise the entries in `⍵` must all be tables of the same length, and an APL matrix of which they are the columns is created.
 
@@ -325,6 +326,17 @@ The number of digits appearing after the decimal point in the format used by mon
 
 * * * * *
 
+The single-purpose APL routines
+-------------------------------
+
+The basic routines defining Lua⋆APL are delivered in `apl._F`. Like `apl._V`, this table is not exported to the global namespace by `apl()`. The routine names are mostly commonly used in APL documentation, such as `Ravel`.
+
+Many of them are wrapped to allow application to array-valued arguments.
+
+This feature is temporary and will be removed once the package reaches pre-alpha status.
+
+* * * * *
+
 The core C routines
 ===================
 
@@ -337,23 +349,15 @@ Block functions all have a table and two integers as their first three arguments
 
 * * * * *
 
-### `get(tbl,a,b[,inc])`
+### `get(tbl,a,b)`
 
-If `inc` is omitted or `inc==1`, returns `tbl[a:b]`. If `inc` is a positive integer, does this in steps of `inc`. Otherwise, replaces booleans by 0-1 values and nils by `inc` (`inc=0/0`, i.e. NaN, is recommended). This function may cause stack overflow if too many items are requested.
-
-* * * * *
-
-### `map(tbl,a,b,ft,target)`
-
-`ft` is applied to the values in `tbl[a:b]` and the result stored in `target[a:b]`. `tbl` and `target` may be the same table.
-
-"Applying" means indexing if `ft` is a table and calling if `ft` is a function, which is assumed to take one argument and return one value.
+Returns `tbl[a:b]`. This function may cause stack overflow if too many items are requested.
 
 * * * * *
 
 ### `pick(tbl,a,b,fct[,count])`
 
-If `count==1`, returns the first index `i` in `tbl[a:b]` such that `fct(tbl[i])` is true. If `count>1`, ignores the first `count-1` hits. If `fct` is not a function or if `count<1,` returns nil.
+If `count==1`, returns the first index `i` in `a:b` such that `fct(tbl[i])` is true. If `count>1`, ignores the first `count-1` hits. If `fct` is not a function or if `count<1,` returns nil.
 
 * * * * *
 
@@ -383,6 +387,14 @@ Other functions
 ### `keep(count,...)`
 
 Returns `count` arguments, starting at the first extra argument. As in the case of `select`, a negative number indexes from the end (-1 is the last argument).
+
+* * * * *
+
+### `map(ft,...)`
+
+Each return value is the result of `ft` applied to the corresponding value in the tuple.
+
+"Applying" means indexing if `ft` is a table and calling if `ft` is a function, which is assumed to be unary with one return value.
 
 * * * * *
 

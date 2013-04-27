@@ -17,7 +17,8 @@ help = require"help"
 local sqrt,      log,      abs,      min,      max,      exp,      Inf = 
  math.sqrt, math.log, math.abs, math.min, math.max, math.exp, math.huge
 local random, concat, unpack = math.random, table.concat, table.unpack
-
+local char = string.char
+    
 -- This is kept in while the program is under development
 
 local meta_ENV=getmetatable(_ENV)
@@ -37,38 +38,44 @@ if not _VERSION:match"Lua 5.2" then
 -- semi-globals, available as upvalues anywhere in this file
 
 local apl={}         -- The module table
-local _APL = {}      -- APL's namespace; later assigned to apl._V 
+local _V = {}        -- APL's namespace; later assigned to apl._V 
 local apl_meta = {}  -- Metatable for APL arrays 
 local helptext={}    -- Help for a few specific APL symbols
 local apl2lua        -- APL to Lua compiler
 local unit={}        -- Unit elements for functions that have them
 
 -- ---------  Forward declaration of all basic APL functions  -------------
--- These names are not exported
+-- These names are exported in apl._F
 
--- Monadic functions
-local Roll, Ceiling, Floor, Shape, Not, AbsoluteValue, IndexGenerator, 
-   Exponential, Negate, Clone, Signum, Reciprocal, Ravel, MatrixInverse,
-   PiTimes, Logarithm, Reverse, ReverseFirst, GradeUp, GradeDown, Squish,
-   Execute, Transpose, Factorial  
--- Dyadic functions
-local Add, Subtract, Multiply, Divide, Power, Circle, Deal,
-   ElementOf, Maximum, Minimum, Reshape, Take, Drop, Decode, Encode, 
-   Residue, Expand, ExpandFirst, Compress, CompressFirst, Find, 
-   Attach, AttachFirst, MatrixDivide, Rotate, RotateFirst, Format, 
-   Binomial, Less, LessEqual, Equal, GreaterEqual, Greater, NotEqual, 
-   Or, And, Nor, Nand
+-- Numeric monadic functions
+-- These functions generalize term-by-term to any array
+local AbsoluteValue, Ceiling, Exponential, Factorial, Floor, Logarithm, Negate, 
+   Not, PiTimes, Reciprocal, Roll, Signum
+-- Numeric dyadic functions
+-- These functions generalize term-by-term to arrays of the same shape or
+--   when one operand is a singleton
+local Add, And, Binomial, Circle, Divide, Equal, Greater, GreaterEqual, Less,
+   LessEqual, Maximum, Minimum, Multiply, Nand, Nor, NotEqual, Or, Power,
+   Residue, Subtract
+-- One-of-a-kind monadic functions
+local Clone, Execute, GradeDown, GradeUp, IndexGenerator, MatrixInverse, 
+   Ravel, Reverse, ReverseFirst, Shape, Squish, Transpose  
+-- One-of-a kind dyadic functions
+local Attach, AttachFirst, Compress, CompressFirst, Deal, Decode, Drop,
+   ElementOf, Encode, Expand, ExpandFirst, Find, Format, MatrixDivide, 
+   Reshape, Rotate, RotateFirst, Take 
 -- Operators 
 local Reduce, ReduceFirst, Scan, ScanFirst, Inner, Outer 
 -- Other
-local Assign, Define, Squish, Index
+local Assign, Define, Index, NaN, Squish
 -- Local utilities, not mapped to symbolic APL functions
-local First, Invert, Map
+local First, Invert, Map, Pass
 
 -- -----------------------------------------------------------------
 -- Auxiliary functions
 
-local argcheck, arr, checktype, is, is_int, is_not, qsort3, sort, utflen
+local argcheck, arr, checktype, is, is_int, is_not, qsort3, sanitize, 
+   sort, utflen
 
 argcheck = function(cond,pos,fct,msg)
    if not cond then
@@ -118,6 +125,13 @@ sort = function(tbl,cmp,first,last)
   return p
 end
 
+sanitize = function(⍵)
+   if is"string"(⍵) then return arr{⍵:byte(1,-1)} end
+   if is"boolean"(⍵) then return ⍵ and 1 or 0 end
+   if is"nil"(⍵) then return NaN end
+   return ⍵
+end
+
 utflen = function(s)
    return #s:gsub("[\xC0-\xEF][\x80-\xBF]*",'.')
 end
@@ -132,7 +146,7 @@ Invert = function(⍵)
    return t
 end
 
-Map = function(ft,tbl) return arr(map(tbl,1,#tbl,ft,{})) end
+Map = function(ft,tbl) return arr{map(ft,unpack(tbl))} end
 --- Applies ft to every element of tbl. ft may be a function or a table.
 
 -- Package for the circle functions. This should be implemented 
@@ -197,11 +211,11 @@ help('CircleFunctions', [[
 AbsoluteValue = math.abs; help(AbsoluteValue, "∣⍵ → math.abs(⍵)")
 Add = function(⍵,⍺) return ⍺+⍵ end
 And = function(⍵,⍺) return ⍵~=0 and ⍺~=0 and 1 or 0 end
-Assign = function(⍵,⍺) _APL[⍺]=⍵ return ⍵ end
+Assign = function(⍵,⍺) _V[⍺]=⍵ return ⍵ end
 
 Attach = function(⍵,⍺)
    local ⍴⍺,⍴⍵ = Shape(⍺),Shape(⍵)
-   if #⍴⍺>1 or #⍴⍵>1 then 
+   if ⍴⍺ and #⍴⍺>1 or ⍴⍵ and #⍴⍵>1 then 
       return Transpose(AttachFirst(Transpose(⍵),Transpose(⍺)))
    end
    ⍺=Ravel(⍺)
@@ -221,7 +235,7 @@ AttachFirst = function(⍵,⍺)
    return ⍺
 end   
 help(AttachFirst,[[
-AttachFirst: ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵.
+AttachFirst: ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
    Vectors are treated as one-row matrices.]])
 
 Binomial = function(⍵,⍺) 
@@ -244,9 +258,13 @@ help(Clone,'Clone: +⍵ returns an exact copy of ⍵')
 
 Compress = function(⍵,⍺)
    local t=arr{}
-   for k,v in ipairs(⍵) do if ⍺[k]>0 then 
-      set(t,#t+1,#t+⍺[k],v)
+   if is_int(⍺) then if ⍺>0 then
+      for k,v in ipairs(⍵) do set(t,#t+1,#t+⍺,v) end
+      return t
    end end
+   checktype(⍺,'table','⍺','Compress') 
+   for k,v in ipairs(⍵) do if ⍺[k]>0 then set(t,#t+1,#t+⍺[k],v) end 
+   end
    return t
 end
 CompressFirst = function(⍵,⍺) return Transpose(Compress(Transpose(⍵),⍺)) end
@@ -304,6 +322,14 @@ ElementOf = function(⍵,⍺)
 end
 help(ElementOf,"⍺∊⍵ → does ⍺ occur in ⍵?")
 
+Equal = function(⍵,⍺) return ⍺==⍵ and 1 or 0 end; 
+
+Execute = function(⍵) 
+   local v=_V[⍵]
+   if v then return Squish(v) else return Define(⍵)() end 
+end
+helptext.⍎="Execute: ⍎⍵ → Define(⍵)()"
+
 Encode = function(⍵,⍺)
    local p=0
    if is"table"(⍺) then for k=1,#⍺ do p=⍺[k]*p+⍵[k] end   
@@ -312,14 +338,6 @@ Encode = function(⍵,⍺)
    return p
    end
 help(Encode,"Encode: ⍵,⍺ → Calculate ⍺ given its base ⍵ digits")
-
-Equal = function(⍵,⍺) return ⍺==⍵ and 1 or 0 end; 
-
-Execute = function(⍵) 
-   local v=_APL[⍵]
-   if v then return v else return Define(⍵)() end 
-end
-helptext.⍎="Execute: ⍎⍵ → Define(⍵)()"
 
 Expand = function(⍵,⍺)
    local t=arr{}
@@ -335,9 +353,10 @@ Exponential = math.exp; help(Exponential,"⍵ → math.exp(⍵)")
 Factorial = function(⍵) local f=1; for k=2,⍵ do f=f*k end; return f end
 
 Find = function(⍵,⍺)
-   return First(function(x) return x==⍺ end,⍵) or 0
+   if is_not"table"(⍺) then ⍺={⍺} end
+   return First(function(x) return x==⍵ end,⍺) or #⍺+1
 end
-help(Find,"⍺⍳⍵ → position of first occurrence of ⍺ in ⍵")
+help(Find,"⍺⍳⍵ → position of first occurrence of ⍵ in ⍺; not found is #⍺+1")
 
 Floor = math.floor; help(Floor, "⍵ → math.floor(⍵)")
 
@@ -358,29 +377,49 @@ GreaterEqual = function(⍵,⍺) return ⍺>=⍵ and 1 or 0 end
 
 Index = function(⍵,⍺)
    checktype(⍵,'table','⍵','Index')
-   local ⍵shape = rawget(⍵,'shape')
-   if is"table"(⍺) then 
-      if not ⍵shape then
-         local t=arr{} 
-         for k,v in ipairs(⍺) do t[k]=⍵[v] end
-         if is"table"(t[1]) then return Squish(t) end
-         t.shape=rawget(⍺,'shape')
-         return t
-       end
-       local i,j, m,n = ⍺[1],⍺[2], ⍵shape[1],⍵shape[2] 
-       if is"number"(i) and is"number"(j) then return ⍵[j+n*(i-1)]
-       elseif is"number"(i) and j==nil then
-          local t, j0 = arr{}, n*(i-1) 
-          for j=1,n do t[j]=⍵[j+j0] end
-          return t
-       elseif i==nil and is"number"(j) then
-          local t = arr{} 
-          for i=1,n do t[i]=⍵[j+n*(i-1)] end
-          return t
-       end
-   else return rawget(⍵,⍺) 
-   end              
+   arr(⍵) -- maybe Index was called directly
+   if is_not"table"(⍺) then return rawget(⍵,⍺) end
+   local ⍴⍵ = rawget(⍵,'shape')
+   if not ⍴⍵ then  -- ⍵ is not a matrix
+      local t=arr{} 
+      for k,v in ipairs(⍺) do t[k]=Index(⍵,v) end
+      if is"table"(t[1]) then return Squish(t) end
+      t.shape=rawget(⍺,'shape')
+      return t
+   end
+   argcheck(#⍺<=2,'⍺','Index','must be a vector with no more than two elements')
+   local I,J, m,n = ⍺[1],⍺[2], ⍴⍵[1],⍴⍵[2]  -- ⍵ is a matrix 
+   if is"number"(I) and is"number"(J) then return rawget(⍵,J+n*(I-1)) end
+   if is"number"(I) then I={I} else I=I or {} end
+   if is"number"(J) then J={J} else J=J or {} end
+   -- both indices are now array-valued; dispose of case of full columns
+   if #I==0 then return Transpose(Index(Transpose(⍵),{J,I})) end
+   local t=arr{}  
+   if #J==0 then -- full rows required
+      t.shape={#I,n}
+      for _,i in pairs(I) do 
+         j0=(i-1)*n; set(t,#t+1,nil,get(⍵,j0+1,j0+n))
+      end
+      return t
+   end
+   t.shape={#I,#J}
+   for _,i in pairs(I) do
+      j0=(i-1)*n; for _,j in pairs(J) do t[#t+1]=rawget(⍵,j+j0) end
+   end
+   return t
 end
+help(Index,[[
+Index: ⍵[⍺] → Index(⍵,⍺)
+  ⍵ is a scalar: ⍵.shape is ignored
+  ⍵ is a vector: ⍵[⍺] term-by-term, result has same shape as ⍺
+  ⍵ is a matrix: ⍺ is coerced to a two-element vector of vectors
+    first element of ⍺ chooses rows, second element chooses columns
+    empty vector means all
+See help'[' for shorthand notation in APL expressions.
+]])
+helptext['[']="Index: ⍵[i], ⍵[i;j], ⍵[i;], ⍵[;j]"
+helptext[']']=helptext['[']
+                 
 
 IndexGenerator = 
    function(⍵) 
@@ -403,7 +442,6 @@ Nor = function(⍵,⍺) return (⍵~=0 or ⍺~=0) and 0 or 1 end
 Not = function(⍵) if ⍵==0 then return 1 else return 0 end end
 NotEqual = function(⍵,⍺) return ⍺~=⍵ and 1 or 0 end
 Or = function(⍵,⍺) return (⍵~=0 or ⍺~=0) and 1 or 0 end
-Outer = function() return end
 Pass = function() return end
 PiTimes = function(⍵) return math.pi*⍵ end
 Power = function(⍵,⍺) return ⍺^⍵ end
@@ -416,13 +454,12 @@ help(Ravel,"Ravel: ,⍵ -- forces ⍵ to be a vector")
 
 Reciprocal = function(⍵) return 1/⍵ end
 
-Reshape = function (⍵,⍺)
-   local tomatrix = is"table"(⍺) and #⍺==2 and ⍺[1]>=0 and ⍺[2]>=0 
-   local tovector = is_int(⍺) and ⍺>=0
-   argcheck(tomatrix or tovector,'⍺','Reshape',
-      'must reshape to vector or matrix')
-   local t=arr{shape=tomatrix and ⍺}
-   local n=tomatrix and ⍺[1]*⍺[2] or ⍺
+Reshape = function (⍵,⍺)   
+   if is"number"(⍺) then ⍺={⍺} end
+   checktype(⍺,'table','⍺','Reshape')
+   local tomatrix = #⍺==2 and ⍺[1]>=0 and ⍺[2]>=0 
+   local t=arr{shape = tomatrix and ⍺}
+   local n=tomatrix and ⍺[1]*⍺[2] or ⍺[1]
    if n==0 then return t end
    if is"table"(⍵) then argcheck(#⍵>0,'⍵','Reshape','empty vector given')
    else ⍵={⍵} end 
@@ -485,9 +522,9 @@ Shape: ⍴⍵ → {} if a number, {#⍵} if a vector, {rows,cols} if a matrix.
 Signum = function(⍵) return ⍵<0 and -1 or ⍵>0 and 1 or 0 end 
 
 Squish = function(⍵) 
-   if is_not"table"(⍵) then return get({⍵},1,1,NaN) end
+   if is_not"table"(⍵) then return sanitize(⍵) end
    local j,n = First(is'table',⍵),#⍵ 
-   if not j then return arr{get(⍵,1,n,NaN)} end
+   if not j then return Map(sanitize,⍵) end
    local m=#⍵[j]
    local culprit = First(is_not'table',⍵)
          or First(function(x) return #x~=m end,⍵)
@@ -495,7 +532,7 @@ Squish = function(⍵)
       'column '..culprit..' and column '..j..' have different length')
    end
    local s,j = arr{shape={n,m}},0
-   for i=1,n do set(s,j+1,j+m,get(⍵[i],1,m,NaN)); j=j+m end
+   for i=1,n do set(s,j+1,j+m,map(sanitize,get(⍵[i],1,m))); j=j+m end
    return Transpose(s)
 end
 helptext.⌷=[[
@@ -594,7 +631,7 @@ local function sizer(x) if x<0 then x=10*abs(x) end; return x end
 local function defaultformat(⍵)   
    if ⍵==nil then return "%s" end
    local fmt
-   local ⎕pp = _APL.⎕pp or 5  
+   local ⎕pp = _V.⎕pp or 5  
    if is"table"(⍵) then 
       if First(function(x) return not x==x end,⍵) then -- NaN found
           return "%s"
@@ -623,7 +660,7 @@ end
 Format = function(⍵,⍺)    
    if ⍵==nil then return aplformat(⍺) end
    if is"string"(⍵) then return ⍵ end
-   ⍺ = (⍺ and aplformat(⍺)) or _APL.⎕format or defaultformat(⍵)
+   ⍺ = (⍺ and aplformat(⍺)) or _V.⎕format or defaultformat(⍵)
    if is"table"(⍵) then
       local f={}
       if is"string"(⍺) then for k,v in ipairs(⍵) do 
@@ -681,7 +718,7 @@ local APL = {
    ⍴ = {Shape,Reshape,expand=0},
    ∼ = {Not},
    ∣ = {AbsoluteValue,Residue,expand=3},
-   ⍳ = {IndexGenerator,Find,expand=1},
+   ⍳ = {IndexGenerator,Find,expand=2},
    ⋆ = {Exponential,Power,expand=3},
    − = {Negate,Subtract,expand=3},
    ['+'] = {Clone,Add,expand=3,unit=0},
@@ -885,7 +922,7 @@ local function get_one_item(str,pos)
    if not s then                -- Not a number? Then it can only be a name
       s, p = get_name(str,pos)
       if not s then return {msg="what's this?"},pos end
-      if is"function"(_APL[s]) then  --// See above: ENHANCEMENT
+      if is"function"(_V[s]) then  --// See above: ENHANCEMENT
          return {func='_V.'..s},p
       elseif param[s] then return {value=s},p
       else return {name=s},p 
@@ -955,6 +992,26 @@ apl.⌷ = Squish
 apl.↑ = Take
 apl.⍉ = Transpose
 
+apl._F = {
+AbsoluteValue=AbsoluteValue, Ceiling=Ceiling, Exponential=Exponential,
+Factorial=Factorial, Floor=Floor, Logarithm=Logarithm, Negate=Negate, Not=Not,
+PiTimes=PiTimes, Reciprocal=Reciprocal, Roll=Roll, Signum=Signum, Add=Add,
+And=And, Binomial=Binomial, Circle=Circle, Divide=Divide, Equal=Equal,
+Greater=Greater, GreaterEqual=GreaterEqual, Less=Less, LessEqual=LessEqual,
+Maximum=Maximum, Minimum=Minimum, Multiply=Multiply, Nand=Nand, Nor=Nor,
+NotEqual=NotEqual, Or=Or, Power=Power, Residue=Residue, Subtract=Subtract,
+Clone=Clone, Execute=Execute, GradeDown=GradeDown, GradeUp=GradeUp,
+IndexGenerator=IndexGenerator, MatrixInverse=MatrixInverse, Ravel=Ravel,
+Reverse=Reverse, ReverseFirst=ReverseFirst, Shape=Shape, Squish=Squish,
+Transpose=Transpose, Attach=Attach, AttachFirst=AttachFirst, Compress=Compress,
+CompressFirst=CompressFirst, Deal=Deal, Decode=Decode, Drop=Drop,
+ElementOf=ElementOf, Encode=Encode, Expand=Expand, ExpandFirst=ExpandFirst,
+Find=Find, Format=Format, MatrixDivide=MatrixDivide, Reshape=Reshape,
+Rotate=Rotate, RotateFirst=RotateFirst, Take=Take, Reduce=Reduce,
+ReduceFirst=ReduceFirst, Scan=Scan, ScanFirst=ScanFirst, Inner=Inner,
+Outer=Outer, Assign=Assign, Define=Define, Index=Index, Squish=Squish,
+First=First, Invert=Invert, Map=Map, Pass=Pass }
+
 -- Customize the help system
 
 help(nil,[[
@@ -1001,7 +1058,7 @@ end
 
 -- report progress of project
 
-locals = {}; missing = {}
+local locals, missing = {},{}
 for i=1,200 do
    local k,v = debug.getlocal(1,i)
    if not k then break else locals[k]=v end
@@ -1023,7 +1080,7 @@ print"The following forward declarations were not completed"
 help(missing)
 print"WARNING: Not all functions that should respect shape do so yet."
 
-apl._V = setmetatable(_APL,{__index=_ENV})
+apl._V = setmetatable(_V,{__index=_ENV})
 apl.lua = function(⍵)
 --- returns Lua code of ⍵
    if is"function"(⍵) then return debug.getinfo(⍵).source 
@@ -1056,7 +1113,7 @@ return apl
 --[[ BUGS
 Not supported:
   domino function
-  indexing
+  indexing in APL expressions (from Lua it works, I think)
 Not matrix-aware yet: Expand, Compress, Inner, Outer
   APL array could include information "apply row-wise", "apply columnwise"
   to ⍺ and to ⍵. 
@@ -1064,5 +1121,5 @@ Not enough runtime checks on input values.
 Format bugs
   support for strings and matrices still sketchy 
   NaN in a matrix
-  could do with a rethink, actually
+Many individual bugs, not all functions fully tested.
 --]]

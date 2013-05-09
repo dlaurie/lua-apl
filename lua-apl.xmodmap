@@ -1,7 +1,7 @@
 ! Keyboard for Lua*APL using the APL385 Unicode font.
 
 ! APL characters in top row
-! ⍬ ⌶ ⍫ ⍒ ⍋ ⌽ ⍉ ⊖ ⍟ ⍱ ⍲ ! ⌹
+! ⍬ ⌶ ⍫ ⍒ ⍋ ⌽ ⍉ ⊖ ⍟ ⍱ ⍲ − ⌹
 ! ⋄ ¨ ¯ < ≤ = ≥ > ≠ ∨ ∧ × ÷
 ! ` 1 2 3 4 5 6 7 8 9 0 - =
 keycode  49 = grave asciitilde grave asciitilde   U22C4 U236C
@@ -15,13 +15,13 @@ keycode  16 = 7 ampersand 7 ampersand             greater U2296
 keycode  17 = 8 asterisk 8 asterisk               notequal U235F
 keycode  18 = 9 parenleft 9 parenleft             U2228 U2371
 keycode  19 = 0 parenright 0 parenright           U2227 U2372
-keycode  20 = minus underscore minus underscore   multiply exclam
+keycode  20 = minus underscore minus underscore   multiply U2212
 keycode  21 = equal plus equal plus               division U2339
 ! APL characters in second row
 !     ⍷         ⍸ ⍥   ⊣ ⊢ ⍙
-! ∣ ⍵ ∊ ⍴ ∼ ↑ ↓ ⍳ ○ ⋆ ← → ⍀
+!   ⍵ ∊ ⍴ ∼ ↑ ↓ ⍳ ○ ⋆ ← → ⍀
 ! Q W E R T Y U I O P [ ] \
-keycode  24 = q Q q Q   U2223                                              
+keycode  24 = q Q q Q                                                 
 keycode  25 = w W w W   U2375
 keycode  26 = e E e E   U220A U2377
 keycode  27 = r R r R   U2374
@@ -49,9 +49,9 @@ keycode  45 = k K k K
 keycode  46 = l L l L   U2395 U235E
 keycode  47 = semicolon colon semicolon colon             U22A2 U2342 
 keycode  48 = apostrophe quotedbl apostrophe quotedbl     U22A3 U233B
-! APL characters in bottom row
+! APL characters in bottom row 
 !     ⍝   ⍎ ⍕     ∵ 
-! ⊂ ⊃ ∩ ∪ ⊥ ⊤ − ⍪ ⍀ ⌿
+! ⊂ ⊃ ∩ ∪ ⊥ ⊤ ∣ ⍪ ⍀ ⌿
 ! Z X C V B N M , . /
 keycode  52 = z Z z Z   U2282 
 keycode  53 = x X x X   U2283
@@ -59,7 +59,7 @@ keycode  54 = c C c C   U2229 U235D
 keycode  55 = v V v V   U222A 
 keycode  56 = b B b B   U22A5 U234E
 keycode  57 = n N n N   U22A4 U2355
-keycode  58 = m M m M   U2212
+keycode  58 = m M m M   U2223
 keycode  59 = comma less comma less           U236A
 keycode  60 = period greater period greater   U2340 U2235
 keycode  61 = slash question slash question   U233F

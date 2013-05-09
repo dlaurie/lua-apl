@@ -1,5 +1,7 @@
 require"apl"()
+idiom = require "finnaplidiom"
 
+--[==[
 print "    The Lua⋆APL module"; print''
 help(apl)
 
@@ -40,3 +42,10 @@ x≥5
 for S in tests:gmatch"[^\n]+" do
   f=∇(S); print(S..' → '..tostring(f())); print('',lua(f)); print''
 end
+]==]
+
+X=⍎"?20⍴26"; Y=⍎"?20⍴26"; print('X=',X); print('Y=',Y)
+for k=1,idiom.maxn do if idiom[k] and idiom[k].arguments=='X←A1; Y←A1' then
+   local utf=idiom[k].utf
+print("Idiom "..k..": "..utf.."\n→ ",⍎(utf))
+end end

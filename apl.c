@@ -1,25 +1,16 @@
-/* apl.c  A variation, for use with apl.lua, on:
+/* apl.c  (c) 2012-2013 Dirk Laurie
 
-   xtable.c      (c) 2012-2013 Dirk Laurie and John Hind 
-      Enhanced version of the Lua table library
+   Core routines for apl.lua
    Same license as Lua 5.2.2 (c) 1994-2012 Lua.org, PUC-Rio
-      from which much of the code has been borrowed anyway.
+
 */
 
-/* on Linux compile  with `cc -shared apl.c -o apl_core.so` */
+/* on Linux compile with `cc -shared apl.c -o apl_core.so` */
 
 /* on Windows, define the symbols 'LUA_BUILD_AS_DLL' and 'LUA_LIB' and
  * compile and link with stub library lua52.lib (for lua52.dll)
  * generating apl_core.dll. If necessary, generate lua52.lib and lua52.dll
  * by compiling Lua sources with 'LUA_BUILD_AS_DLL' defined.
-*/
-
-/* Program design notes
-
-Only a few building blocks are written in C and exported in the 
-subtables `block` and `tuple`.  The rest of the functionality is 
-written in Lua. 
-
 */
 
 #include <stdlib.h>
@@ -53,7 +44,6 @@ static void arrayprint(lua_State *L, int from, int to) {
   lua_rawseti(L,a,x); lua_rawseti(L,a,y); 
 
 /* get(tbl,a,b) */
-/* block.get(tbl,a,b) */
 static int block_get(lua_State *L) {
   int a=luaL_checkint(L,2), b=luaL_checkint(L,3), inc, count;
   luaL_checktype(L,1,LUA_TTABLE);
@@ -171,57 +161,82 @@ static int lua_where (lua_State *L) {
   return 1;
 }
 
-
-/* block.trisect(tbl,l,r,v,cmp,tag) */
 #define tbl 1
-#define v 4
+#define low 2
+#define middle 3
+#define high 4
 #define cmp 5
-#define tag 6
+#define wrk 6
 #define ai 7
 #define precedes(i,j) (lua_isnoneornil(L,cmp)? lua_compare(L,i,j,LUA_OPLT): \
     (lua_pushvalue(L,cmp), lua_pushvalue(L,i), lua_pushvalue(L,j), \
     lua_call(L,2,1), test=lua_toboolean(L,-1), lua_pop(L,1), test))
-static int block_trisect(lua_State *L) {
-  int lo=luaL_checkint(L,2), hi=luaL_checkint(L,3),
-    lt=lo, gt=hi, i=lo, test, hastag=!lua_isnoneornil(L,tag);  
-  if (hi<=lo) return 0;
+
+/* merge(tbl,low,middle,high,cmp) */
+static int block_merge(lua_State *L) {
+  int lo=luaL_checkint(L,low), mid=luaL_checkint(L,middle), 
+    hi=luaL_checkint(L,high), i, j, k, test;  
+  if (hi<=mid || mid<=lo) return 0;
   luaL_checktype(L,tbl,LUA_TTABLE); 
-  lua_settop(L,tag);
-  luaL_argcheck(L,!lua_isnoneornil(L,v),v,"central value must be supplied");
   if (!lua_isnoneornil(L,cmp)) {
     luaL_checktype(L,cmp,LUA_TFUNCTION);
-    luaL_argcheck(L,!precedes(v,v),cmp,
-         "equal elements may not test out-of-order");
+#ifdef CHECK_COMPARISON_FUNCTION
+    lua_settop(L,ai-1);
+    lua_rawgeti(L,tbl,lo);
+    luaL_argcheck(L,!precedes(ai,ai),cmp,"invalid order function for sorting");
+#endif
   }
-  if (hastag) { 
-    luaL_checktype(L,tag,LUA_TTABLE);
-    luaL_argcheck(L,!lua_compare(L,tbl,tag,LUA_OPEQ),tag,
-      "the tag table may not be the same as the main table"); }
-/* The following code is based on `sort` from Quick3way.java, described 
-   in the 4th edition of "Algorithms" by Robert Sedgewick. The Java code 
-   is downloadable from <http://algs4.cs.princeton.edu/23quicksort>.
- */
-  while (i<=gt) {
+  lua_settop(L,wrk-1);
+  lua_createtable(L,mid-lo+1,0);
+  for (i=1,j=lo;j<=mid;i++,j++) { lua_rawgeti(L,tbl,j); lua_rawseti(L,wrk,i); }  
+  lua_rawgeti(L,tbl,j); lua_rawgeti(L,wrk,1); 
+  for (i=1,k=lo; k<j && j<=hi; k++)
+    if (precedes(ai,ai+1)) {
+      lua_insert(L,ai); 
+      lua_rawseti(L,tbl,k); 
+      lua_rawgeti(L,tbl,++j);
+      lua_insert(L,ai);
+    } else { 
+      lua_rawseti(L,tbl,k); 
+      lua_rawgeti(L,wrk,++i); 
+    }    
+  for (;k<j;k++,i++) { lua_rawgeti(L,wrk,i); lua_rawseti(L,tbl,k); }
+}
+    
+/* sort(tbl,l,r,cmp) */
+#undef cmp
+#undef precedes
+#define cmp 4
+#define v 5
+#define aj 6
+#define precedes(i,j) (lua_isnoneornil(L,cmp)? lua_compare(L,i,j,LUA_OPLT): \
+    (lua_pushvalue(L,cmp), lua_pushvalue(L,i), lua_pushvalue(L,j), \
+    lua_call(L,2,1), test=lua_toboolean(L,-1), lua_pop(L,1), test))
+static int block_sort(lua_State *L) {
+  int first=luaL_checkint(L,2), last=luaL_checkint(L,3), i, j, k, test;  
+  if (last<=first) return 0;
+  luaL_checktype(L,tbl,LUA_TTABLE); 
+  if (!lua_isnoneornil(L,cmp)) {
+    luaL_checktype(L,cmp,LUA_TFUNCTION);
+#ifdef CHECK_COMPARISON_FUNCTION
+    lua_settop(L,v-1);
+    lua_rawgeti(L,tbl,first);
+    luaL_argcheck(L,!precedes(v,v),cmp,"invalid order function for sorting");
+#endif
+  }
+/* insert sort */
+  lua_settop(L,v-1);
+  for(i=first+1;i<=last;i++) {
+    k=first;
     lua_rawgeti(L,tbl,i);
-    if (precedes(ai,v)) { 
-      if (i>lt) { move(tbl,lt,i); 
-        lua_rawseti(L,tbl,lt); 
-        if (hastag) { swap(tag,i,lt); } }
-      else lua_pop(L,1);
-      lt++; i++; 
+    for (j=i;j>first;j--) {
+      lua_rawgeti(L,tbl,j-1);
+      if (precedes(v,aj)) { lua_rawseti(L,tbl,j); }
+      else { lua_settop(L,v); k=j; break; }
     }
-    else if (precedes(v,ai)) { 
-      if (i<gt) { move(tbl,gt,i); 
-        lua_rawseti(L,tbl,gt); 
-        if (hastag) { swap(tag,i,gt); } }
-      else lua_pop(L,1);
-      gt--;
-    }
-    else { lua_pop(L,1); i++; }
+    lua_rawseti(L,tbl,k); 
   }
-  lua_pushinteger(L,lt-1); 
-  lua_pushinteger(L,gt+1);
-  return 2;
+  return 0;
 }
 
 static const luaL_Reg funcs[] = {
@@ -229,11 +244,12 @@ static const luaL_Reg funcs[] = {
   {"set", block_set},
   {"move", block_move},
   {"transpose", block_transpose},
-  {"trisect",block_trisect},
   {"pick", block_pick},
   {"map", tuple_map},
   {"keep", tuple_keep},
   {"where", lua_where},
+  {"sort", block_sort},
+  {"merge", block_merge},
   {NULL, NULL}
 };
 

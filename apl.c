@@ -19,6 +19,7 @@
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
+#include "math.h"
 
 /* For debugging. I've put these back too often to omit them altogether.
 static void stackprint(lua_State *L, int from) {
@@ -70,7 +71,8 @@ static int block_set(lua_State *L) {
     store(tbl,item++,a); 
     if(a==b) break; 
   }
-  return 0;
+  lua_pushvalue(L,1);
+  return 1;
 }   
 
 /* move(tbl,a1,b1,a2[,b2]) */
@@ -95,7 +97,8 @@ static int block_move(lua_State *L) {
   else if ((a2-a1)*inc1<0) 
     for (;;a1+=inc1,a2+=inc2) { move(1,a1,a2); if (a1==b1) break; }
   else for (;;b1-=inc1,b2-=inc2) { move(1,b1,b2); if (a1==b1) break; }
-  return 0;   
+  lua_pushvalue(L,1);
+  return 1;   
 }
 
 /* transpose(tbl,m,n,tblT) */  
@@ -239,6 +242,58 @@ static int block_sort(lua_State *L) {
   return 0;
 }
 
+/* Auxiliary package for the circle functions. Numerically stable
+   versions of the inverse hyperbolics due to W. Kahan. Those can be
+   replaced by C builtins when the C99 standard is met, removing the
+   need for math_log1p. */
+static lua_Number math_log1p (lua_Number x) {
+  lua_Number u=1+x;
+  if (u==1) return x;
+  return log(u)*x/(u-1);
+}
+
+static int math_circ0 (lua_State *L) {
+  lua_Number x=luaL_checknumber(L, 1);
+  lua_pushnumber(L, sqrt(1-x*x));
+  return 1;
+}
+
+static int math_circ4 (lua_State *L) {
+  lua_Number x=luaL_checknumber(L, 1);
+  lua_pushnumber(L, sqrt(1+x*x));
+  return 1;
+}
+
+static int math_circ_4 (lua_State *L) {
+  lua_Number x=luaL_checknumber(L, 1);
+  lua_pushnumber(L, sqrt(x*x-1));
+  return 1;
+}
+
+static int math_acosh (lua_State *L) {
+  lua_Number x=luaL_checknumber(L, 1);
+  lua_pushnumber(L, log(x+sqrt(x*x-1)));
+  return 1;
+}
+
+static int math_asinh (lua_State *L) {
+  lua_Number x=luaL_checknumber(L, 1);
+  lua_Number s=fabs(x);
+  s=math_log1p(s*(1+s/(sqrt(1+x*x)+1)));
+  if (x<0) s=-s;
+  lua_pushnumber(L,s);
+  return 1;
+}   
+
+static int math_atanh (lua_State *L) {
+  lua_Number x=luaL_checknumber(L, 1);
+  lua_Number s=fabs(x);
+  s=math_log1p(2*s/(1-s))/2;
+  if (x<0) s=-s;
+  lua_pushnumber(L,s);
+  return 1;
+}   
+
 static const luaL_Reg funcs[] = {
   {"get", block_get},
   {"set", block_set},
@@ -250,6 +305,12 @@ static const luaL_Reg funcs[] = {
   {"where", lua_where},
   {"sort", block_sort},
   {"merge", block_merge},
+  {"circ0", math_circ0},
+  {"circ4", math_circ4},
+  {"circ_4", math_circ_4},
+  {"acosh", math_acosh},
+  {"asinh", math_asinh},
+  {"atanh", math_atanh},
   {NULL, NULL}
 };
 

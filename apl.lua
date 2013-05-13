@@ -50,6 +50,7 @@ local newoperator    -- add an operator to `apl` and the APL compiler
 local argcheck       -- LuaL-style argument check
 local checktype      -- LuaL-style type check
 local is             -- non-error type check
+local loading=true   -- set to false when the module returns
 
 do -- APL-to-Lua compiler
  -- upvalues: apl2lua, functions, operators, lpeg
@@ -62,7 +63,8 @@ end
 
 local lookup = function(tbl) 
 --- Cmt function that succeeds when key is in tbl, returning
--- the value, and fails otherwise
+-- the value, and fails otherwise. `subj` is provided by `Cmt`
+-- but is not needed.
    return function(subj,pos,key)
       local v = tbl[key]
       if v then return pos,v end
@@ -92,22 +94,24 @@ local neutral = R"\x21\x7E"-later-S"()[;]"
 local name = first*later^0 + utf + neutral
 
 local functions={}
-local operators={} 
+local monadic_operators={} 
+local dyadic_operators={} 
 local funcname = _s^0*Cmt(name,lookup(functions))*_s^0
-local operator = _s^0*Cmt(name,lookup(operators))*_s^0
-
+local monadic_operator = _s^0*Cmt(name,lookup(monadic_operators))*_s^0
+local dyadic_operator = _s^0*Cmt(name,lookup(dyadic_operators))*_s^0
+local operator = monadic_operator + dyadic_operator
 local varname = _s^0*C(first*later^0+utf-funcname-operator)*_s^0
 local param = _s^0*(P'⍺'/1 + P'⍵'/1)*_s^0 -- not to be looked up in _V
 
 local apl_expr = P{ "expr";
    expr = 
-     V'func'*V'expr'/"%1(%2)" +
-     V'leftarg'*V'func'*V'expr'/"%2(%3,%1)" +
      (param/1*'←'*V"expr")/"set%1(%2)" +
-     ((V"variable"-param)/"'%1'")*'←'*V"expr"/"assign(%2,%1)" + 
+     ((V"variable"-param)/"'%1'")*'←'*V"expr"/"Assign(%2,%1)" + 
+     V'leftarg'*V'func'*V'expr'/"%2(%3,%1)" +
+     V'func'*V'expr'/"%1(%2)" +
      V"leftarg";
-   func = funcname*operator*funcname/"%2(%1,%3)" + 
-          funcname*operator/"%2(%1)" + 
+   func = funcname*dyadic_operator*funcname/"%2(%1,%3)" + 
+          funcname*monadic_operator/"%2(%1)" + 
           funcname;
    leftarg = V"value" + '('*V"expr"*')'/1;
    value = param + vector/numbers + V"variable"/"_V.%1"; 
@@ -128,8 +132,11 @@ end
 local register = function (class, fct, APLname, LuaName, alias, help)
 --- register a function for the APL compiler, Lua interface and help
    argcheck(not class[APLname],2,"name '"..APLname.."' already in use")
+   if alias then 
+       argcheck(not class[alias],4,"name '"..alias.."' already in use")
+       class[alias]=LuaName or APLname 
+   end
    class[APLname]=LuaName or APLname
-   if alias then class[alias]=LuaName or APLname end
    apl[APLname]=fct
    if LuaName then apl[LuaName]=fct end
    if help then helptext[APLname]=help end
@@ -139,8 +146,13 @@ newfunc = function (fct, APLname, LuaName, alias, help)
    register(functions, fct, APLname, LuaName, alias, help)
 end
 
-newoperator = function (fct, APLname, LuaName, alias, help)
-   register(operators, fct, APLname, LuaName, alias, help)
+newoperator = function (fct, APLname, LuaName, alias, help, adity)
+   if adity==1 or adity==3 then 
+       register(monadic_operators, fct, APLname, LuaName, alias, help)
+   end
+   if adity==2 or adity==3 then 
+       register(dyadic_operators, fct, APLname, LuaName, alias, help)
+   end
 end
 
 local preamble=[[
@@ -172,6 +184,7 @@ local function lua_code(⍵)
 end
 
 apl.lua = lua_code
+
 end -- of APL-to-Lua compiler
 
 -- ---------  Forward declaration of all basic APL functions  -------------
@@ -279,6 +292,14 @@ sanitize = function(⍵)
    return ⍵
 end
 
+unsanitize = function(⍵,⍺)
+   if ⍺==2 then 
+      if is"table"(⍵) then return char(unpack(⍵)) else return char(⍵) end
+   end
+   if ⍺==1 then return ⍵~=0 end
+   return ⍵
+end
+
 First = function(fct,tbl) return pick(tbl,1,#tbl,fct) end
 
 Invert = function(⍵) 
@@ -290,52 +311,22 @@ end
 Map = function(ft,tbl) return arr{map(ft,unpack(tbl))} end
 --- Applies ft to every element of tbl. ft may be a function or a table.
 
--- Package for the circle functions. This should be implemented 
--- in C for the sake of efficiency and in order to avoid the fancy 
--- footwork required to preserve significance near 0.
-
-local circ0 = function(x) return sqrt(1-x^2) end
-local circ4 = function(x) return sqrt(1+x^2) end
-local circ_4 = function(x) return sqrt(-1+x^2) end
-
-local log1p = function(x)
-   local u=1+x
-   if u==1 then return x end
-   return log(u)*x/(u-1)
-end
-
-local asinh = function(x)
-   local s=abs(x)
-   s=log1p(s*(1+s/(circ_4(x)+1)))
-   if x<0 then return -s else return s end
-end
-
-local acosh = function(x) 
-   return log(x+circ_4(x))
-end
-
-local atanh = function(x) 
-   local s=abs(x)
-   s=log1p(2*s/(1-s))/2
-   if x<0 then return -s else return s end   
-   end
-
 local circfunc = {
-   [0] = circ0; -- sqrt(1-⍵^2)
+   [0] = core.circ0; -- sqrt(1-⍵^2)
    [1] = math.sin;
    [2] = math.cos;
    [3] = math.tan;
-   [4] = circ4; -- sqrt(1+⍵^2) 
+   [4] = core.circ4; -- sqrt(1+⍵^2) 
    [5] = math.sinh;
    [6] = math.cosh;
    [7] = math.tanh;
    [-1] = math.asin;
    [-2] = math.acos;
    [-3] = math.atan;
-   [-4] = circ_4; -- sqrt(⍵^2-1)
-   [-5] = asinh;
-   [6] = acosh;
-   [7] = atanh;
+   [-4] = core.circ_4; -- sqrt(⍵^2-1)
+   [-5] = core.asinh;
+   [-6] = core.acosh;
+   [-7] = core.atanh;
 }
 help('CircleFunctions', [[
   (¯4 0 4 ○ ⍵) = ((⍵^2-1)⋆0.5,(1-⍵^2)⋆0.5,(1+⍵^2))
@@ -379,20 +370,6 @@ help(AttachFirst,[[
 AttachFirst: ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
    Vectors are treated as one-row matrices.]])
 
-Backslash = function(⍵,⍺) 
-   if is"function"(⍺) then return Scan(⍺)(⍵) 
-      elseif ⍺==nil then return Scan(⍵)
-      else return Expand(⍵,⍺) 
-   end
-end
-
-BackslashFirst = function(⍵,⍺) 
-   if is"function"(⍺) then return ScanFirst(⍺)(⍵) 
-       elseif ⍺==nil then return ScanFirst(⍵)
-       else return ExpandFirst(⍵,⍺) 
-   end
-end
-
 Binomial = function(⍵,⍺) 
    ⍺=min(⍺,⍵-⍺)
    if ⍺<0 then return 0 end
@@ -414,6 +391,7 @@ help(Clone,'Clone: +⍵ returns an exact copy of ⍵')
 Compress = function(⍵,⍺)
    local t=arr{}
    if is_int(⍺) then if ⍺>0 then
+      checktype(⍵,'table','⍵','Compress')
       for k,v in ipairs(⍵) do set(t,#t+1,#t+⍺,v) end
       return t
    end end
@@ -506,16 +484,16 @@ Floor = math.floor; help(Floor, "⍵ → math.floor(⍵)")
 -- Format is defined after the A-Z group
 
 GradeUp = function(⍵) 
-   ⍵ = Clone(⍵) 
-   return arr(sort(⍵,nil,1,#⍵))
+   checktype(⍵,'table','⍵','GradeUp')
+   local x=IndexGenerator(#⍵)
+   return sort(x,function(a,b) return ⍵[a]<⍵[b] end)
    end;
-help(GradeUp,"⍋⍵ → permutation that sorts ⍵ upwards")
 
 GradeDown = function(⍵) 
-   ⍵ = Clone(⍵) 
-   return arr(sort(⍵,nil,#⍵,1))
+   checktype(⍵,'table','⍵','GradeDown')
+   local x=IndexGenerator(#⍵)
+   return sort(x,function(a,b) return ⍵[a]>⍵[b] end)
    end;
-help(GradeDown,"⍒⍵ → permutation that sorts ⍵ downwards")
 
 Greater = function(⍵,⍺) return ⍺>=⍵ and 1 or 0 end
 GreaterEqual = function(⍵,⍺) return ⍺>=⍵ and 1 or 0 end
@@ -574,10 +552,10 @@ help(IndexGenerator,"IndexGenerator: ⍳⍵ → {1,2,...,⍵}")
 Inner = function(f1,f2) 
    if f1==Pass then return Outer(f2) end
    return function(⍵,⍺) 
+      checksize(⍺,⍵,'Inner')
+      argcheck(not ⍺.shape,'⍺',"Can't handle matrices yet")      
+      argcheck(not ⍵.shape,'⍵',"Can't handle matrices yet")  
       local n = #⍵
-      argcheck(n==#⍺,'⍺',"unequal array sizes")
-      argcheck(not ⍺.shape,'⍺',"Can't handle matrices ")      
-      argcheck(not ⍵.shape,'⍵',"Can't handle matrices ")  
       local y=f2(⍵[n],⍺[n])
       for k=n-1,1,-1 do 
          y=f1(y,f2(⍵[k],⍺[k]))
@@ -689,6 +667,11 @@ end
 help(RotateFirst,
    "RotateRows: ⍺⊖⍵ → rows of ⍵ rotated up by ⍺ (or down by -⍺")
 
+Same = function(⍵,⍺)
+   return sanitize(⍺==⍵)
+end
+help(Same,"Same: ⍺≡⍵ means Lua equality but APL 0-1 result")
+
 Scan = function(⍺)
    argcheck(unit[⍺],'⍺',"function with no unit")
    return function(⍵)
@@ -713,20 +696,6 @@ Shape: ⍴⍵ → {} if a number, {#⍵} if a vector, {rows,cols} if a matrix.
 
 Signum = function(⍵) return ⍵<0 and -1 or ⍵>0 and 1 or 0 end 
 
-Slash = function(⍵,⍺) 
-   if is"function"(⍺) then return Reduce(⍺)(⍵) 
-      elseif ⍺==nil then return Reduce(⍵)
-      else return Compress(⍵,⍺)
-   end
-end
-
-SlashFirst = function(⍵,⍺) 
-     if is"function"(⍺) then return ReduceFirst(⍺)(⍵) 
-        elseif ⍺==nil then return ReduceFirst(⍵)
-        else return CompressFirst(⍵,⍺) 
-     end
-  end
-
 Squish = function(⍵) 
    if is_not"table"(⍵) then return sanitize(⍵) end
    local j,n = First(is'table',⍵),#⍵ 
@@ -735,12 +704,19 @@ Squish = function(⍵)
    local culprit = First(is_not'table',⍵)
          or First(function(x) return #x~=m end,⍵)
    if culprit then argcheck(false,'⍵',
-      'column '..culprit..' and column '..j..' have different length')
+      'row '..culprit..' and row '..j..' have different length')
    end
    local s,j = arr{shape={n,m}},0
    for i=1,n do set(s,j+1,j+m,map(sanitize,get(⍵[i],1,m))); j=j+m end
-   return Transpose(s)
+   return s
 end
+help(Squish,[[
+Squish: ⌷⍵ → convert ⍵ from Lua to APL.
+   Vectors of rows are converted to matrices. 
+   Booleans are converted to 0-1, Nil to NaN.
+   Strings are converted to arrays of bytes.
+   Vectors of strings are converted to vectors of rows of bytes.
+   Other scalars are returned unchanged.]])
 
 Subtract = function(⍵,⍺) return ⍺-⍵ end
     
@@ -764,6 +740,31 @@ Transpose = function(⍵)
 end   
 help(Transpose,'Transpose: ⍉⍵ → matrix transpose of ⍵')
 
+Unsquish = function(⍵,⍺)
+   if is_not"table"(⍵) or ⍺==2 and not ⍵.shape then 
+      return unsanitize(⍵,⍺) 
+   end
+   if not ⍵.shape then return 
+      Map(function(⍵) return unsanitize(⍵,⍺) end,⍵) 
+   end
+   local t=arr{}
+   local s=⍵.shape
+   local n=s[2]
+   local i0=0
+   for i=1,s[1] do
+      t[i]=set(arr{},1,nil,get(⍵,i0+1,i0+n))
+      t[i]=Unsquish(t[i],⍺)
+      i0=i0+n
+      end 
+   return t
+end
+help(Unsquish,[[
+Unsquish: ⍺⌻⍵ → convert ⍵ from APL to Lua
+   Matrices are converted to vectors of rows. 
+   ⍺=1: 0 is converted to False, other values to True.
+   ⍺=2: Numbers in the range 0 to 255 are converted to bytes.
+        Vectors become strings, matrices become arrays of strings.]])
+   
 do -- Format
 local function sizer(x) if x<0 then x=10*abs(x) end; return x end
 
@@ -794,7 +795,8 @@ local function aplformat(f)
    elseif is"string"(f) then return(f)
    elseif is"number"(f) then 
       return '%'..("%.1f"):format(abs(f))..(f<0 and 'e' or 'f')
-   elseif is"table"(f) then return Map(aplformat,f)
+   elseif is"table"(f) then 
+      return Map(aplformat,f)
    else checktype(f,'number',1)
    end      
 end
@@ -802,6 +804,11 @@ end
 Format = function(⍵,⍺)    
    if ⍵==nil then return aplformat(⍺) end
    if is"string"(⍵) then return ⍵ end
+   if is"table"(⍵[1]) then 
+      local f={}
+      for k,v in ipairs(⍵) do f[k]=' '..Format(v,⍺) end
+      return concat(Map(tostring,f),"\n")
+   end
    ⍺ = (⍺ and aplformat(⍺)) or _V.⎕format or defaultformat(⍵)
    if is"table"(⍵) then
       local f={}
@@ -852,25 +859,8 @@ other = { Assign=Assign, Define=Define, Index=Index, Squish=Squish }
 
 -- ----------- end of named APL functions -------------------
 
---[[ Mapping of APL symbols to Lua functions
-
-Non-ASCII UTF-8 names are preferred. Most entries are tables coded
-as follows:
-
-   [1]: which function when monadic?
-   [2]: which function dyadic?
-   expand=0: don't treat either argument termwise (default)
-   expand=1: termwise application to ⍺
-   expand=2: termwise application to ⍵ (default)
-   expand=3: termwise application to ⍺ and ⍵ simultaneously
-   scalar=0: table-valued arguments allowed (default)
-   scalar=1: ⍺ must be scalar
-   scalar=2: ⍵ must be scalar
-   scalar=3: ⍺ and ⍵ must both be scalar 
-   lua: alphabetic Lua name for ASCII special character, used in calls
-   alias: ASCII special character similar to UTF-8 APL character, 
-      recognized by the compiler
-
+--[[ Mapping of APL symbols to Lua functions.
+Entries are coded as specified in the comments to `make_function` below.
 --]]
 
 local APL = {
@@ -900,23 +890,24 @@ local APL = {
    ≤ = {nil,LessEqual,expand=3},
    ≥ = {nil,GreaterEqual,expand=3},
    ≠ = {nil,NotEqual,expand=3},
+   ≡ = {nil,Same},
    ∧ = {nil,And,expand=3,unit=0,alias='^'},
    ∨ = {nil,Or,expand=3,unit=1},
    ⍲ = {nil,Nand,expand=3},
    ⍱ = {nil,Nor,expand=3},
-   ['.'] = {Outer,Inner,lua="dot",operator=3},
-   ['/'] = {Slash,lua='slash',expand=0,operator=0,help=[[
+   ['.'] = {nil,Inner,lua="dot",operator=2},
+   ['/'] = {Reduce,Compress,lua='slash',expand=0,operator=1,help=[[
 If ⍺ is a vector, collects ⍺ copies of ⍵: 2 0 4 / 1 3 7 → 1 1 7 7 7 7
 If ⍺ is a function, applies ⍺ in between ⍵: +/ 1 3 7 → 1+3+7 → 11
    Returns unit of `⍺` if `⍵` is empty.
 ]]},
-   ⌿ = {SlashFirst,expand=0,operator=0},
-   ['\\'] = {Backslash,lua='backslash',expand=0,operator=0,help=[[
+   ⌿ = {ReduceFirst,CompressFirst,expand=0,operator=1},
+   ['\\'] = {Scan,Expand,lua='backslash',expand=0,operator=1,help=[[
 If ⍺ is a vector, puts in zeros: 2 0 4 \ 1 3 7 → 0 0 1 3 0 0 0 0 7
 If ⍺ is a function, cumulatively applies ⍺ to ⍵: +/ 1 3 7 → 1 4 11
    Only defined when ⍺ has a unit u, i.e. an element such that ⍺(x,u)==x.
 ]]}, 
-   ⍀ = {BackslashFirst,expand=0,operator=0},
+   ⍀ = {ScanFirst,ExpandFirst,expand=0,operator=1},
    ⊤ ={Decode},
    ∇ ={Define},
    ↓ ={Drop},
@@ -928,14 +919,13 @@ If ⍺ is a function, cumulatively applies ⍺ to ⍵: +/ 1 3 7 → 1 4 11
    Or supply actual Lua format as a string.
    Vector-valued formats apply columnwise.
 ]]},
-   ⍋ ={GradeUp},
-   ⍒ ={GradeDown},
-   ∘ ={Pass},
-   ⌷ ={Squish,help=[[
-Squish: ⌷⍵ → APL array with the same elements as ⍵.
-   Matrices are given by supplying columns. 
-   Booleans are converted to 0-1, Nil to NaN.
-   Other scalars are returned unchanged.]]},
+   ⍋ ={GradeUp, help=[[
+GradeUp: ⍋⍵ → permutation that sorts ⍵ into ascending order]]},
+   ⍒ ={GradeDown, help=[[
+GradeDown: ⍒⍵ → permutation that sorts ⍵ into descending order]]},
+   ∘ = {Pass},
+   ⌷ = {Squish},
+   ⌻ = {Unsquish}, 
    ↑ ={Take,help="Take first or last ⍺ items from ⍵; pad with zeros"},
    ⍉ ={Transpose},
    ⍎ = {Execute,help="Execute: ⍎⍵ → Define(⍵)()"}
@@ -989,35 +979,49 @@ local function create_dyadic(f,expand)
    end      
 end
 
-local alias = {} -- needed only by apl's import function
+local alias = {} -- needed only by help function
 local make_function = function(name,func)
---- func = {monadic,dyadic[,makeop=false][,makefunc=not makeop][,help=nil]}
--- i.e you don't have to say 'makefunc=true' except when 'makeop' is true
-   local f1 = func[1]
-   local f2 = func[2]
-   local f    
+--- make_function = function(name,func)
+-- name: name by which APL compiler should recognize function
+-- func: {monadic,dyadic,key=val,...}
+--   monadic: the Lua function to be invoked when called with one argument
+--   dyadic: the Lua function to be invoked when called with two arguments 
+--     These parameters must loaded functions, not source code, but could
+--     have been created by `∇` or written directly in Lua.
+--   lua="LuaName": name to which the compiler should translate `name`,
+--     only needed when `name` is a special character
+--   alias="alias": another name recognized by the APL compiler as
+--     referring to the same function
+--   help="helptext": what should be printed by `help"name"`
+--   expand=0: don't treat either argument termwise (default)
+--     This is the proper case when the function makes its own
+--     provision for array-valued arguments.
+--   expand=1: apply termwise to ⍺ if array-valued
+--   expand=2: apply termwise to ⍵ if array-valued
+--   expand=3: apply termwise to either ⍺ or ⍵, which must be of 
+--     equal length if both array-valued
+--   operator=1: `monadic` is a monadic operator. 
+--   operator=2: `dyadic` is a dyadic operator. 
+--   operator=3: both are operators     
+   local expand=func.expand or 0
+   local f1 = create_monadic(func[1],expand)
+   local f2 = create_dyadic(func[2],expand)
+   local f
    if f1 and f2 then f =       
          function(⍵,⍺) return (⍺ and f2(⍵,⍺)) or f1(⍵) end
    else f = f1 or f2
    end
    if func.lua then alias[func.lua]=true end
-   if func.alias then alias[func.alias]=true end
-   if func.makeop then 
-      newoperator(f, name, func.lua, func.alias, func.help) end
-   if not func.makeop or func.makefunc then
+   if func.alias then alias[func.alias]=name end
+   if func.operator then 
+      newoperator(f, name, func.lua, func.alias, func.help, func.operator) end
+   if not func.operator or (f2 and func.operator==1) then
       newfunc(f, name, func.lua, func.alias, func.help)
    end
    if func.unit then unit[apl[name]]=func.unit end   
 end
 
-for name,func in pairs(APL) do 
-   local expand=func.expand or func.operator or 0
-   local f1, f2 = func[1],func[2]
-   func[1]=create_monadic(func[1],expand)
-   func[2]=create_dyadic(func[2],expand)
-   make_function(name,func)
-   func[1],func[2] = f1,f2
-end 
+for name,func in pairs(APL) do make_function(name,func) end 
   
 --- Customize the help system
 -- Help is defined in three ways:
@@ -1067,6 +1071,7 @@ help = function(s,...)
 --    APL function, help on its monadic and dyadic usage.
 -- "all": Prints available topics. 
    if not(s==s) then print(helptext.NaN) return end
+   if alias[s] then s=alias[s] end
    if helptext[s] then print(helptext[s]) return end 
    if APL[s] and select('#',...)==0 then 
       for a=1,2 do if APL[s][a] then 
@@ -1121,6 +1126,8 @@ apl_meta.__pow = reverse(apl.⋆)
 apl_meta.__unm = apl.−
 apl_meta.__concat = reverse(apl.comma)
 apl_meta.__index = Index
+apl.Assign = Assign
+apl.make_function = make_function
 
 setmetatable(apl,{
 __call = 
@@ -1133,13 +1140,14 @@ __call =
    end})
 
 setmetatable(_ENV,meta_ENV)
+loading=false
 return apl
 
 --[[ BUGS
 Not supported:
   domino function
 Not matrix-aware yet: Expand, Compress, Inner, Outer
-  APL array could include information "apply row-wise", "apply columnwise"
+  APL array might include information "apply row-wise", "apply columnwise"
   to ⍺ and to ⍵. 
 Not enough runtime checks on input values.
 Format bugs

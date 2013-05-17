@@ -264,8 +264,10 @@ static int incomplete (lua_State *L, int status) {
 static int guess_apl(char* b) {
   char* c; 
   int alpha=0, nonascii=0;  
-/* If a quote or double-quote is found, it is not APL */
-  for (c=b;*c;c++) if (*c==34 || *c==39 ) return 0;
+/* If a double-quote is found, it is not APL */
+  if (strchr(b,'\34')) return 0;
+/* If the string "apl." is found, it is not APL */
+  if (strstr(b,"apl.")) return 0;
 /* If a byte outside the range 0..127 is found, it is probably APL */
   for (c=b;*c;c++) if ( (*c>='A'&&*c<='Z') || (*c>='a'&&*c<='z')) alpha++; 
   else if (*c<0 || *c>127) nonascii++;

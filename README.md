@@ -196,7 +196,7 @@ APL syntax depends on knowing whether a name refers to a function, a monadic ope
 
 You register a function as follows:
 
-       apl.make_function('%',{∇"⍵÷100",∇"⍺×⍵÷100",lua='percent',
+       apl.add_function('%',{∇"⍵÷100",∇"⍺×⍵÷100",lua='percent',
          alias='p',expand=3,help=[[
     1. Percent: %⍵ → ⍵/100
     2. PercentOf: ⍺%⍵ → ⍺×⍵/100]]})
@@ -211,7 +211,7 @@ or as
        return ⍎"5 10 20p 400 600 800"
     20 60 160
 
-Note the space after `p`, otherwise `p400` would be parsed as a name. `help(apl.make_function)` tells more, including how to register an operator.
+Note the space after `p`, otherwise `p400` would be parsed as a name. `help(apl.add_function)` tells more, including how to register an operator.
 
 General design
 --------------
@@ -248,7 +248,7 @@ For APL functions that you defined yourself, `help` prints the APL code and `lua
 APL types vs Lua types
 ----------------------
 
-From here onwards, "APL" will mean "the dialect of APL supported by Lua⋆APL". This is mostly APL⋆PLUS (from which the APL star in the name has been borrowed), but without the things Lua does better: program structure, strings, IO etc. So there are no numbered program lines and no `→` instructions; no character vectors and no string constants; no `⎕` for standard input and output.
+From here onwards, "APL" will mean "the dialect of APL supported by Lua⋆APL". This is mostly APL⋆PLUS (from which the APL star in the name has been borrowed), but without the things Lua does better: program structure, system calls, input-output etc. So there are no numbered program lines and no `→` instructions; no character vectors (string constants are scalar); no `⎕` for standard input and output.
 
 APL recognizes four types: functions, scalars, vectors and matrices. These are accommodated directly in Lua types as follows:
 
@@ -289,11 +289,12 @@ APL does not have a concept of `nil`. The squish function `⌷` converts nils to
 
 Lua strings are treated as scalars. APL-style characters and character matrices are not supported, and the use of string-valued arguments to any APL function except `⍎` and `⍕` does not form part of the design of Lua⋆APL. The coherence of both APL and Lua is so good that useful results may well in some cases be obtained from string arguments, but that kind of usage is at this stage an unsupported lucky coincidence.
 
-APL operations on strings are handled by converting them to vectors of byte values.
+If you really need character vectors, you can converting strings to vectors of byte values.
 
        x=apl.⌷"⍺-⍵"
        =x
     226 141 186 45 226 141 181
+       =apl.⌻(x,2)
 
 ### Tables
 
@@ -420,35 +421,53 @@ Note that all names used in an APL expression are non-local. That implies that t
 Notes on specific functions
 ---------------------------
 
-`∇"APL source"`  
+Some functions are non-standard.
+
+-   Some versions of APL do not define them.
+-   Those that do, do not always do it in the same way.
+
+I hope most of the cases where this dialect of APL is nonstandard are documented below. Remember that *there are no string literals*.
+
+Ways of calling a function shown before the semicolon apply to Lua; those shown after, to APL.
+
+`add_function(name,func)`  
+Registers a name with the APL compiler as a function or as an operator. `func` is a table in which `func[1]` is the monadic function and `func[2]` the dyadic function associated with the given name. If only one of the two is given, that one will be used for all calles. Several key-value options are available: see the online help.
+
+Assign: `; ⍺←⍵`  
+The assign function `←` stores `⍵` in `apl._V` at the key `⍺`. This value takes precedence in an APL expression over a global Lua variable with the same name.
+
+Define: `f=∇"APL source", f=∇("APL source","APL name"); ⍺∇⍵`  
+This is implemented as an APL function, not a system function. The argument is a string, so that the function must either be called from Lua or the string argument `⍵` must have been created earlier. The argument `⍺` must be a name not yet known to the APL compiler, under which the new function will be registered.
+
 The result is always a function of two arguments, as described in [How does the APL compiler work?](#how-does-the-apl-compiler-work).
 
-Calling this function from inside an APL expression is less versatile: the string arguments needs to have been created earlier since string-valued constants are not supported inside APL expressions.
+Format: `; ⍺⍕⍵`  
+The dyadic format function uses a number as format: `12` means `%12d`, `12.6` means `%12.6f` and `¯12.6` means `%12.6e`. You can't have more than 9 digits after the decimal point. An array of numbers can be given: they apply term-by-term if `⍵` is a vector and columnwise if `⍵` is a matrix.
 
-`⌷(⍵)`  
-Lua-to-APL conversion. This is not a standard APL function and will normally only be called from Lua.
+You can also supply a string-valued format or array of formats.
+
+Pass: `; ∘⍵, ⍺∘⍵`  
+Apart from its role as a placeholder in an outer product, this function ignores its arguments and returns nothing. This bare fact is mentioned without any claim that it is useful.
+
+Squish: `apl.⌷"...", apl.⌷{...}, apl.⌷(⍵); ⌷⍵`  
+Lua-to-APL conversion.
 
 -   If `⍵` is nil, it is replaced by `NaN`.
 -   If `⍵` is boolean, it is replaced by a 0-1 value.
 -   If `⍵` is a string, it is converted to an array of byte values.
 -   If `⍵` is any other scalar, it is returned unchanged by `⌷⍵`. This is unlikely to be useful except in the case of a number.
 -   If `⍵` is a table, and none of the entries in `⍵` is itself a table, `⍵` is converted to an APL table by setting its metatable, and returned. No new table is created.
--   Otherwise the entries in `⍵` must all be tables of the same length, and an APL matrix of which they are the columns is created.
+-   Otherwise the entries in `⍵` must all be tables of the same length, and an APL matrix of which they are the rows is created.
 
-`⍕(⍵,⍺), ⍺⍕⍵`  
-The dyadic format function uses a number as format: `12` means `%12d`, `12.6` means `%12.6f` and `¯12.6` means `%12.6e`. You can't have more than 9 digits after the decimal point. An array of numbers can be given: they apply term-by-term if `⍵` is a vector and columnwise if `⍵` is a matrix.
+Unsquish: `; ⍺⌻⍵`  
+APL-to-Lua conversion. A selective inverse of `⌷`.
 
-You can also supply a string-valued format or array of formats.
+-   Always: Matrices are converted to vectors of rows.
+-   `⍺=1`: 0 is converted to `false`, other values to `true`.
+-   `⍺=2`: Numbers in the range 0 to 255 are converted to bytes. Vectors become strings, matrices become arrays of strings.
 
-`⍺←⍵`  
-The assign function `←` stores `⍵` in `apl._V` at the key `⍺`. This value takes precedence over a global Lua variable with the same name. If `⍵` is a function, the assignment is final. Any later assignment with key `⍺` is an error. The reason for this is that the APL compiler sees `⍺` before it sees `←` and does different things depending on whether `⍺` is a function.
-
-You can force reassignment by calling `←` from Lua: `←(⍵,⍺)`.
-
-`⍺/⍵`, `⍺⌿⍵`, `⍺\⍵`, `⍺⍀⍵`  
+Scan, Reduce: `⍺/⍵`, `⍺⌿⍵`, `⍺\⍵`, `⍺⍀⍵`  
 When given an empty argument `⍵`, the reduce operators return the unit of the function `⍺` e.g. `⌈/0⍴0` returns `-Inf`, or raise an error if no unit is defined. The scan operators always raise an error if no unit is defined. At present only the associative dyadic functions `+ − ∨ ∧ ⌈ ⌊` have units, and there is no mechanism to define other units.
-
-`make_function` :
 
 * * * * *
 
@@ -464,17 +483,27 @@ The subtables are classified as follows:
     `monadic`: other monadic
     `dyadic`: other dyadic 
     `other`: functions with special syntax or operating on Lua types
+    'utility`: useful functions callable only from Lua
 
-The basic numeric functions are defined for scalar arguments only. The actual functions known to the APL compiler have been wrapped to expand to non-scalar arguments. You can see whether this has been done by printing the function addresses:
+The basic numeric functions are defined for scalar arguments only. Many of the functions known to the APL compiler are wrappers of basic functions to allow non-scalar arguments. You can see whether a function has been wrapped by printing the function addresses:
 
-print(apl.plus,apl.\_F.numeric2.Add) function: 0x815d7e0 function: 0x8168248
+       print(apl.plus,apl._F.numeric2.Add)
+    function: 0x815d7e0 function: 0x8168248
+
+Almost all functions in `apl._F` are documented, albeit lightly.
+
+       help(apl._F.utility.Map)
+
+    --- Map(ft,tbl) Applies ft (function or table) to every element of tbl.
 
 * * * * *
 
 The core C routines
 ===================
 
-These have been adapted from other packages, especially `xtable` by John Hind and myself They are delivered in a table returned by require `apl_core`.
+These have been adapted from other packages, especially `xtable` by John Hind and myself. The sort routines were developed thanks to stimulating discussions on Lua-L with Steve Fisher and Eike Decker. They are delivered in a table returned by require `apl_core`.
+
+The table also returns six functions needed for the APL `○` function which are not described here.
 
 Block functions
 ---------------

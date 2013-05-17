@@ -1,51 +1,82 @@
-require"apl"()
+apl=require"apl"
+apl()
 idiom = require "finnaplidiom"
 
---[==[
-print "    The Lua⋆APL module"; print''
-help(apl)
-
 tests = [[
-2 4 6 8 + 100
-5 6 7 8 - 1 2 3 4
-×¯3 0 5
-×/3 4 5
-÷⍳5
-+\÷⍳5
-1 1 0 0∨1 0 1 0
-1 1 0 0∧1 0 1 0
-1 1 0 0⍱1 0 1 0
-1 1 0 0⍲1 0 1 0
-~1 1 0 0∧1 0 1 0
-⌽⍳5
-2⌽⍳9
-¯2⌽⍳9
-x←⌷3 1 4 1 5 9 2 6 5 3 5 8 9 7 9 3
-(5↓x),¯10↑¯5↑x
-(0,⍳9)∊x
-(0,⍳9)⍳x
-2⍟x*2
-x≥5
-⍋x
-1 2 3,4 5
-⍴1 2 3⍪4 5 6
-1 2 3○○÷6
-10⊥?9⍴9
-10⊥9?9
-⍴1 2 3∘.+4 5
-⌊/0↑3 4 5
-10 1 9⌊4 5 6
-(2⋆⍳10)⌈100
-13|1e13
-(0,⍳10)!10
+2 3⍴¨5 4
+A←⍒⍳10
+A,0↑A[5]←-5
+n←(0,⍳10)!10
+f←n⍪?n
+⌻f
+⊖f
+⊖⌻f
+1 2 3○○÷6 1 4
+○÷¯1 ¯2 ¯3○1 2 3○○÷6 1 4
+(∘1)⍕∘1
+2⌻32+⍳94
+⍟¯1,0○1.4
+0 1∘.∨0 1
+0 1∘.∧0 1
+0 1∘.⍱0 1
+0 1∘.⍲0 1
+10|(⍳9)∘.+⍳9
+10|(⍳9)∘.×⍳9
+10|(⍳9)∘.-⍳9
+10|(⍳9)∘.<⍳9
+10|(⍳9)∘.≤⍳9
+10|(⍳9)∘.=⍳9
+10|(⍳9)∘.>⍳9
+10|(⍳9)∘.≠⍳9
+10|(⍳9)∘.⌈⍳9
+10|(⍳9)∘.⌊⍳9
+10|(⍳9)∘.|⍳9
+⌈(⍳9)∘.÷⍳9
+⌊(⍳9)∘.÷⍳9
+1 2 3=1 3⍴1 2 3
+1 2 3≡1 3⍴1 2 3
 ]]
-for S in tests:gmatch"[^\n]+" do
-  f=∇(S); print(S..' → '..tostring(f())); print('',lua(f)); print''
-end
-]==]
 
-X=⍎"?20⍴26"; Y=⍎"?20⍴26"; print('X=',X); print('Y=',Y)
-for k=1,idiom.maxn do if idiom[k] and idiom[k].arguments=='X←A1; Y←A1' then
-   local utf=idiom[k].utf
-print("Idiom "..k..": "..utf.."\n→ ",⍎(utf))
+apl_tally = {}
+lua_tally = {}
+omitted = {}
+for k in pairs(apl) do omitted[k]=true end
+
+function occurs(S,k)
+   local c,j,i=-1,0
+   repeat i,j = S:find(k,j+1,true); c=c+1 until not j   
+   return c
+end   
+
+print""
+for S in tests:gmatch"[^\n]+" do
+   if S:match"%S" then
+      f=∇(S) 
+      print('   '..S,lua(f)); print(tostring(f()))
+      for k in pairs(apl) do
+         local c=occurs(S,k)
+         if c>0 then             
+            apl_tally[k] = (apl_tally[k] or 0) + c
+            omitted[k] = nil
+         end 
+         c=occurs(lua(f):sub(4),k)
+         if c>0 and not (',.'):find(k) then             
+            lua_tally[k] = (lua_tally[k] or 0) + c
+            omitted[k] = nil
+         end
+      end
+   end
+end
+
+print [[
+
+     Tally of APL functions tested
+     -----------------------------
+       APL     Lua]]
+for k,v in pairs(apl) do if apl_tally[k] or lua_tally[k] then
+   print(k,apl_tally[k] or 0,lua_tally[k] or 0) 
 end end
+
+print "\nThe following APL functions are not represented"
+help(omitted)
+

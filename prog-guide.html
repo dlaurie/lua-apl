@@ -1,0 +1,93 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <title></title>
+  <style type="text/css">code{white-space: pre;}</style>
+</head>
+<body>
+<h1 id="luaapl-programmers-guide">Lua⋆APL Programmer's Guide</h1>
+<p>© Dirk Laurie 2013 Lua-style MIT licence</p>
+<p>This part of the documentation is aimed at those who wish to add to the actual APL dialect, by supplying functions more sophisticated than can be defined by the techniques described in the User's Manual, or by adding operators.</p>
+<p>APL syntax depends on knowing whether a name refers to a function, a monadic operator, a dyadic operator or a value. For the built-in functions, including functions assigne to APL names, this information is predefined, but for user-defined functions, the function or operator must be registered. The name will then shadow an object of the same name in the APL global namespace.</p>
+<p>An unregistered name in an APL expression is always assumed to refer to a value.</p>
+<p>You register a function as follows:</p>
+<pre><code>   apl.add_function(&#39;%&#39;,{∇&quot;⍵÷100&quot;,∇&quot;⍺×⍵÷100&quot;,lua=&#39;percent&#39;,
+     alias=&#39;p&#39;,expand=3,help=[[
+1. Percent: %⍵ → ⍵/100
+2. PercentOf: ⍺%⍵ → ⍺×⍵/100]]})</code></pre>
+<p>which can then be used as</p>
+<pre><code>   return ⍎&quot;5 10 20%400&quot;
+20 40 80</code></pre>
+<p>or as</p>
+<pre><code>   return ⍎&quot;5 10 20p 400 600 800&quot;
+20 60 160</code></pre>
+<p>Note the space after <code>p</code>, otherwise <code>p400</code> would be parsed as a name. <code>help(apl.add_function)</code> tells more, including how to register an operator.</p>
+<hr />
+<h2 id="the-single-purpose-apl-routines">The single-purpose APL routines</h2>
+<p>The basic routines defining Lua⋆APL are delivered in the subtables of <code>apl._F</code>. The routine names are mostly commonly used in APL documentation, such as <code>Ravel</code>.</p>
+<p>The subtables are classified as follows:</p>
+<pre><code>`numeric1`: monadic scalar numeric
+`numeric2`: dyadic scalar numeric
+`monadic`: other monadic
+`dyadic`: other dyadic 
+`other`: functions with special syntax or operating on Lua types
+&#39;utility`: useful functions callable only from Lua</code></pre>
+<p>The basic numeric functions are defined for scalar arguments only. Many of the functions known to the APL compiler are wrappers of basic functions to allow non-scalar arguments. You can see whether a function has been wrapped by printing the function addresses:</p>
+<pre><code>   print(apl.plus,apl._F.numeric2.Add)
+function: 0x815d7e0 function: 0x8168248</code></pre>
+<p>Almost all functions in <code>apl._F</code> are documented, albeit lightly.</p>
+<pre><code>   help(apl._F.utility.Map)</code></pre>
+<h1 id="the-core-c-routines">The core C routines</h1>
+<p>Some of these have been adapted from other packages: for the block functions I acknowledge useful ideas of John Hind, Steve Fisher and Eike Decker. They are delivered in a table returned by <code>require apl_core</code>.</p>
+<p>The table also returns six functions needed for the <code>Circ</code> function (APL <code>○</code>) which are not described here.</p>
+<h2 id="block-functions">Block functions</h2>
+<p>Block functions all have a table and two integers as their first three arguments. The notation <code>tbl[a:b]</code> is used for a block of values with increasing keys if <code>a&lt;b</code> and decreasing keys if <code>a&gt;b</code>. Thus <code>tbl[b:a]</code> is the reverse of <code>tbl[a:b]</code>.</p>
+<hr />
+<h3 id="gettblab"><code>get(tbl,a,b)</code></h3>
+<p>Returns <code>tbl[a:b]</code>. This function may cause stack overflow if too many items are requested.</p>
+<hr />
+<h3 id="movetblabcd"><code>move(tbl,a,b,c[,d])</code></h3>
+<p>Moves <code>tbl[a,b]</code> to <code>tbl[c,d]</code>, overwriting whatever was there. If <code>d</code> is omitted, it is calculated so that <code>b-a=d-c</code>. Returns <code>tbl</code>.</p>
+<hr />
+<h3 id="picktblabfctcount"><code>pick(tbl,a,b,fct[,count])</code></h3>
+<p>If <code>count==1</code>, returns the first index <code>i</code> in <code>a:b</code> such that <code>fct(tbl[i])</code> is true. If <code>count&gt;1</code>, ignores the first <code>count-1</code> hits. If <code>fct</code> is not a function or if <code>count&lt;1,</code> returns nil.</p>
+<hr />
+<h3 id="settblab..."><code>set(tbl,a,b,...)</code></h3>
+<p>Sets <code>tbl[a:b]</code> to the given values, overwriting existing values.</p>
+<p>If the vararg list is empty (not even containing <code>nil</code>), stores nothing. The list is treated cyclically: if it is exhausted before <code>b</code> is reached, the supply of values is resumed from its beginning. If <code>b</code> is nil, values are stored in <code>tbl[a],tbl[a+1],...</code> until the list is exhausted. Returns <code>tbl</code>.</p>
+<hr />
+<h3 id="transposetblabtarget"><code>transpose(tbl,a,b,target)</code></h3>
+<p>Stores the transpose of <code>tbl[1:a*b]</code> in <code>target[1:a*b]</code>. <code>tbl</code> is assumed to contain <code>a</code> blocks of <code>b</code> elements, and <code>target</code> will contain <code>b</code> blocks of <code>a</code> elements. Returns <code>target</code>.</p>
+<p><code>tbl</code> and <code>target</code> are not allowed to be the same array.</p>
+<hr />
+<h3 id="sorttblabcmp"><code>sort(tbl,a,b[,cmp])</code></h3>
+<p>Sorts <code>tbl[a:b]</code> by insertion.</p>
+<hr />
+<h3 id="mergetbllowmiddlehighcmp"><code>merge(tbl,low,middle,high[,cmp])</code></h3>
+<p>Merges <code>tbl[low:middle]</code> with <code>tbl[middle+1:high'</code> according to <code>cmp</code> (specified as for the standard <code>table.sort</code>). Both halves are assumed to be already sorted.</p>
+<h2 id="apl-functions">APL functions</h2>
+<p>These functions operate on or return tables that conform to the specifications for APL arrays. See main documentation.</p>
+<h3 id="compatabop"><code>compat(a,b,op)</code></h3>
+<p>Tests whether <code>a</code> and <code>b</code> are compatible for dyadic operations. They are not compatible if both are arrays and either are vectors of unequal length, or incompatible shapes for the specified operation. Returns <code>true</code> if compatible, <code>false,m,n</code> otherwise, where <code>m</code> and <code>n</code> are lengths that cause incompatibility.</p>
+<p>For term-by-term operations (<code>op=1</code>), a one-row and a one-column matrix are not compatible with each other, but either is compatible with a vector of the same length. For matrix multiplication, row or column scaling, etc., a vector <code>a</code> or <code>b</code> is compatible if a one-row or one-column matrix (respectively) would be.</p>
+<h3 id="expandfa1a2x1x2"><code>expand(f,a1,a2,x1,x2)</code></h3>
+<p>Applies the dyadic function <code>f</code> term-by-term to the elements of <code>a1</code> and <code>a2</code>. Singleton arguments in either position are considerd to be compatible as specified by the boolean values <code>x1</code> and <code>x2</code>. The shape of the result is taken from <code>a1</code> by preference; if <code>a1</code> has no shape, it is taken from <code>a2</code>.</p>
+<h3 id="iotan"><code>iota(n)</code></h3>
+<p>Returns an APL vector containing the first <code>n</code> integers.</p>
+<h3 id="rhovn"><code>rho(v,n)</code></h3>
+<p>Returns an APL vector containing <code>n</code> copies of <code>v</code>.</p>
+<h2 id="other-functions">Other functions</h2>
+<h3 id="keepcount..."><code>keep(count,...)</code></h3>
+<p>Returns <code>count</code> arguments, starting at the first extra argument. As in the case of <code>select</code>, a negative number indexes from the end (-1 is the last argument).</p>
+<hr />
+<h3 id="mapft..."><code>map(ft,...)</code></h3>
+<p>Each return value is the result of <code>ft</code> applied to the corresponding value in the tuple.</p>
+<p>&quot;Applying&quot; means indexing if <code>ft</code> is a table and calling if <code>ft</code> is a function, which is assumed to be unary with one return value.</p>
+<hr />
+<h3 id="wherelevel"><code>where(level)</code></h3>
+<p>Returns a string identifying the point in the source code from which <code>where</code> is being called if <code>level=1</code>, the point from which that routine was called if <code>level=2</code>, etc.</p>
+</body>
+</html>

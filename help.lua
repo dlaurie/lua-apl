@@ -4,7 +4,6 @@
 --$ lua -l help
 --help()
 
-
 do
 -- sample shorthelp and longhelp
 local shorthelp = [[
@@ -145,27 +144,39 @@ local help = function(fct,...)
 -- function: Prints the docstring of `fct`, if any.
 -- table: Prints `help` field, if any; else contents.
 -- string: Prints help on the topic, if any.
--- "all": Prints available topics. 
-   local helptext
-   local dump = string.dump
-   if select('#',...)>1 then print('Too many arguments: try `help(help)`')
-   elseif fct==nil then 
-      if select('#',...)>0 then shorthelp=... else print(shorthelp) end
-   elseif fct=='all' then
-      if select('#',...)>0 then print("help cannot be redefined for 'all'")
-      else print ('Help available via `help"topic"` on these topics:\n  '..
-         fold(topics(longhelp)))
-      end
-   elseif select('#',...)==1 then longhelp[fct]=...
-   elseif longhelp[fct] then print(longhelp[fct])   
-   elseif type(fct)=="table" then 
-      if type(fct.help)=='string' then print(fct.help)
-      else print(fold("Contents: "..topics(fct)))
-      end
-   elseif type(fct)=='function' then print(docstring(fct) or nohelp)
-   else print(helpless:format(fct))
+-- "all": Prints available topics.
+--     help(topic,false)
+-- Removes topic from "all"
+--     help(fct,"newhelp")
+-- Redefines what you will get from `help(fct)`
+--     help(fct,0)
+-- (or anything else) don't print help, return it instead 
+   if select('#',...)>1 then 
+      print('Too many arguments: try `help(help)`'); return
    end
-end
+   local helptext
+   local redefine = select('#',...)==1 and type(select(1,...))=='string'
+   local kill = select(1,...)==false
+   local printme = select('#',...)==0
+   if kill then longhelp[fct]=nil
+   elseif fct==nil then 
+      if redefine then shorthelp=... else helptext=shorthelp end
+   elseif fct=='all' then
+      if redefine then print"help cannot be redefined for 'all'"; return
+      else helptext='Help available via `help"topic"` on these topics:\n  '..
+         fold(topics(longhelp))
+      end
+   elseif redefine then longhelp[fct]=...
+   elseif longhelp[fct] then helptext=longhelp[fct]
+   elseif type(fct)=="table" then 
+      if type(fct.help)=='string' then helptext=fct.help
+      else helptext=fold("Contents: "..topics(fct))
+      end
+   elseif type(fct)=='function' then helptext=docstring(fct) or nohelp
+   else print(helpless:format(fct)); return
+   end
+   if printme then print(helptext) else return helptext end
+end 
 
 return help
 

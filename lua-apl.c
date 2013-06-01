@@ -19,7 +19,7 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-#define LUA_APL_VERSION "Lua⋆APL 0.1"
+#define LUA_APL_VERSION "Lua⋆APL 0.2.0"
 
 #if !defined(LUA_PROMPT)
 #define LUA_PROMPT		"> "
@@ -262,16 +262,21 @@ static int incomplete (lua_State *L, int status) {
 }
 
 static int guess_apl(char* b) {
-  char* c; 
-  int alpha=0, nonascii=0;  
-/* If a double-quote is found, it is not APL */
-  if (strchr(b,'\34')) return 0;
-/* If the string "apl." is found, it is not APL */
-  if (strstr(b,"apl.")) return 0;
-/* If a byte outside the range 0..127 is found, it is probably APL */
+  char *c, *Lua="ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijklmnpqrstuvwxyz(";
+  int alpha=0, nonascii=0;
+  while (*b==' ') b++;
+  if (*b==0) return 0; 
+/* If it starts with '=' or "return": Lua */
+  if (*b=='=' || strncmp(b,"return",6)==0) return 0;
+/* If it does not start with an alpha or left parenthesis: APL */
+  if (strchr(Lua,*b)==0) return 1;
+/* If a double-quote or "apl." is found anywhere: Lua */
+  if (strchr(b,'"') || strstr(b,"apl.")) return 0;
+/* If an APL separator or diamond is found anywhere: APL */
+  if (strstr(b,"⋄") || strstr(b,"⍝")) return 1;
+/* If non-ASCII outnumbers alpha: APL */
   for (c=b;*c;c++) if ( (*c>='A'&&*c<='Z') || (*c>='a'&&*c<='z')) alpha++; 
   else if (*c<0 || *c>127) nonascii++;
-/* printf("Found %d alpha bytes, %d non-ascii bytes\n",alpha,nonascii); */
   return nonascii>alpha;
 }
 
@@ -288,7 +293,7 @@ static int pushline (lua_State *L, int firstline) {
   if (l > 0 && b[l-1] == '\n')  /* line ends with newline? */
     b[l-1] = '\0';  /* remove it */
   if (firstline && guess_apl(b))  /* does this look like raw APL ? */  
-    lua_pushfstring(L, "return ⍎'%s'", b); 
+    lua_pushfstring(L, "return Execute\"%s\"", b); 
   else if (firstline && b[0] == '=')  /* first line starts with `=' ? */
     lua_pushfstring(L, "return %s", b+1);  /* change it to `return' */
   else
@@ -497,16 +502,25 @@ static int pmain (lua_State *L) {
 }
 
 int main (int argc, char **argv) {
-  int status, result;
+  int status, result, k;
+  char *myarg[argc+5], *arg[]={"-l","apl-compiler","-e","apl=require'apl-compiler'; apl()","-i"};
+  if (argc>1) {
+    printf("Error: lua-apl does not accept extra command-line arguments\n");
+    return EXIT_FAILURE;
+  }
   lua_State *L = luaL_newstate();  /* create state */
   if (L == NULL) {
     l_message(argv[0], "cannot create state: not enough memory");
     return EXIT_FAILURE;
   }
+  /* add arguments to load and initialize module `apl` */
+  myarg[0]=strdup(argv[0]);
+  for (k=0; k<5; k++) myarg[k+1]=strdup(arg[k]);
+  argc+=5; 
   /* call 'pmain' in protected mode */
   lua_pushcfunction(L, &pmain);
   lua_pushinteger(L, argc);  /* 1st argument */
-  lua_pushlightuserdata(L, argv); /* 2nd argument */
+  lua_pushlightuserdata(L, myarg); /* 2nd argument */
   status = lua_pcall(L, 2, 1, 0);
   result = lua_toboolean(L, -1);  /* get result */
   finalreport(L, status);

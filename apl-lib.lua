@@ -17,8 +17,7 @@
 
 -- The module returns a table. Naming convention:
 --
--- CamelCase: APL functions
--- lowercase: utilities
+-- CamelCase: APL function-- lowercase: utilities
 -- _CAPS:     needed by system, or gives information
 
 -- For most of the individual functions, the help system provides the 
@@ -50,7 +49,7 @@ local char, format = string.char, string.format
     
 -- This is kept in while the program is under development
 
-debugging=true
+DEBUGGING=true  -- deliberately not made local
 local logfile = io.open("/tmp/apl-lua.log","w")
 logfile:setvbuf"no"
 
@@ -76,13 +75,22 @@ local unit={}        -- Unit elements for functions that have them
 local loading=true   -- set to false when the module returns
 
 -- -----------------------------------------------------------------
--- Auxiliary functions
+-- Auxiliary functions. The ones declared forward are documented in
+-- the Programmer's Guide.
 
 local argcheck, arr, checksize, checktype, core_index, core_newindex,
-   extent, indices, is, is_int, is_not, is_matrix, sanitize, sort
+   extent, indices, is, is_int, is_not, sanitize, shape, sort
 local NaN = 0/0
 
+local adjustindex = function (p,a)
+-- calculate length and starting index
+   local n,i,j=min(p,abs(a))
+   if a>=0 then i,j=1,1 else i,j=p-n+1,abs(a)-n+1 end
+   return n,i,j
+end
+
 arr_meta = getmetatable(rho(0,0))
+local core_index, core_newindex = arr_meta.__index, arr_meta.__newindex
 
 -- All argument-check routines prefer the actual called name;
 -- the optional last parameter is a fallback when no such name
@@ -96,8 +104,9 @@ argcheck = function(cond,pos,msg,name)
 end
 
 arr = function(_w)
---- Make _w into an APL array 
+--- Make _w into an APL array; respects existing fields, but sets apl_len 
    if not is"table"(_w) then _w={_w} end
+   rawset(_w,'apl_len',#_w)
    return setmetatable(_w,arr_meta) 
 end
 
@@ -134,6 +143,12 @@ extent = function(shape)
    end
 end
 
+filler = function(x)
+-- neutral value of same type as first value in x
+   if is"table"(x) then x=x[1] end
+   if is"string"(x) then return '' else return 0 end
+end
+
 -- iterator for actual indices in a matrix slice
 indices = function(n,i,j)
    local ni,nj = #i,#j
@@ -151,8 +166,15 @@ end
 -- non-error type check
 is = function(typ) return function(x) return type(x)==typ end end
 is_int = core.is_int 
-is_matrix = function(x) return is"table"(x) and (x.rows or x.cols) end
 is_not = function(typ) return function(x) return type(x)~=typ end end
+
+local like = function(w,v)
+-- Object with same shape as w and value v (defaults to filler(w))
+   local m,n = shape(w)
+   v=v or filler(w)
+   if not m then return v end
+   return rho(v,m,n)
+end
 
 do -- sort package
 local max_chunk_size = 12
@@ -188,6 +210,10 @@ sanitize = function(_w)
    return _w
 end
 
+shape = function(x) if is"table"(x) then 
+   if x.cols then return x.rows, x.cols else return #x end end
+end
+
 local unsanitize = function(_w,_a)
    if _a==2 then 
       if is"table"(_w) then return char(unpack(_w)) else return char(_w) end
@@ -200,8 +226,9 @@ local first = function(fct,tbl) return pick(tbl,1,#tbl,fct) end
 --- first(fct,tbl): The first index in tbl where fct returns true.
 
 local invert = function(_w) 
---- invert(tbl): Switches keys and values in an array.
-   local t=arr{} 
+--- invert(tbl): Switches keys and values in a table.  
+-- Return value is just a table, not an APL array.
+   local t={} 
    for k,v in ipairs(_w) do t[v]=k end 
    return t
 end
@@ -226,6 +253,52 @@ local circfunc = {
 
 do -------------  LuaAPL functions A-Z  -------------------------------
 
+local downrank = function(_w)
+   local rows, cols = _w.rows, _w.cols
+   local res=rho(0,rows)
+   local i0=0
+   for i=1,rows do
+      res[i]=set(rho(0,cols),1,nil,get(_w,i0+1,i0+cols))
+      i0=i0+cols
+   end 
+   return res
+end
+
+local stencil = function(w,s,f)
+-- Constant array of shape `abs(s)` and value `v`. `s` defaults to
+-- `Shape(w)`. If `f` is absent, `v` is `w` if scalar, `w[1]` if an 
+-- array. If present, `v` is replaced by `f(v)`.
+   local m, n, l, w1
+   s = s or Shape(w)
+   if is"table"(s) then m,n = s[1],s[2] else m=s end
+   if not m then return end                           -- bad shape
+   if is"table"(w) then l,w1 = #w, w[1] else l,w1 = 1,w end
+   if f then w1=f(w1) end 
+   if w1==nil and not (m==0 or n==0) then return end  -- bad data
+   return rho(w1,abs(m),n and abs(n))
+end
+
+local uprank = function(_w) 
+   local m,n = #_w,1
+   for i,v in ipairs(_w) do if is"table"(v) then n=max(n,#v) end end
+   local res=rho(filler(_w),m,n)
+   local j=1
+   for i,v in ipairs(_w) do          
+     if is_not"table"(v) then res[j]=v 
+        else set(res,j,nil,unpack(_w[i]))
+     end 
+     j=j+n 
+   end
+   return res
+end
+
+-- If op(f) works on a vector, spread(f,k) works on a matrix along axis k
+local spread=function(f,k)
+   return function(_a) return 
+     function(_w) return Rerank(f(_a)(Rerank(_w,-2)),2) end
+   end
+end
+
 -- It's annoying, I know, that the _left_ operand in infix notation 
 -- maps to the _second_ operand in postfix notation, but there is
 -- method in the madness.
@@ -240,7 +313,7 @@ do -------------  LuaAPL functions A-Z  -------------------------------
 
 -- numeric monadic functions
 -- these functions generalize term-by-term to any array
-local Abs, Ceil, Exp, Fact, Floor, Ln, Neg, Not, Pi, Recip, Roll, Sign
+local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Recip, Roll, Sign, Unm
 -- numeric dyadic functions
 -- these functions generalize term-by-term to arrays of the same shape or
 --   when one operand is a singleton
@@ -248,11 +321,11 @@ local Add, And, Binom, Circ, Div, Log, Max, Min, Mod, Mul, Nand, Nor,
    Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
 -- one-of-a-kind monadic functions
 local Clone, Down, MatInv, Pass, Range, Ravel, Reverse, Reverse1, Shape, 
-   Squish, Transpose, Up   
+   Transpose, Up   
 -- one-of-a kind dyadic functions
 local Attach, Attach1, Compress, Compress1, Deal, Decode, Drop, Encode, 
-   Expand, Expand1, Find, Format, Has, Get, MatDiv, Reshape, Rotate, 
-   Rotate1, Same, Take, Unsquish 
+   Expand, Expand1, Find, Format, Has, Get, MatDiv, Rerank, Reshape, 
+   Rotate, Rotate1, Same, Take 
 -- monadic operators 
 local Both, Each, Outer, Reduce, Reduce1, Scan, Scan1
 -- dyadic operators
@@ -262,7 +335,7 @@ local Inner
 local forward = [[
 -- numeric monadic functions
 -- these functions generalize term-by-term to any array
-local Abs, Ceil, Exp, Fact, Floor, Ln, Neg, Not, Pi, Recip, Roll, Sign
+local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Recip, Roll, Sign, Unm
 -- numeric dyadic functions
 -- these functions generalize term-by-term to arrays of the same shape or
 --   when one operand is a singleton
@@ -270,17 +343,21 @@ local Add, And, Binom, Circ, Div, Log, Max, Min, Mod, Mul, Nand, Nor,
    Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
 -- one-of-a-kind monadic functions
 local Clone, Down, MatInv, Pass, Range, Ravel, Reverse, Reverse1, Shape, 
-   Squish, Transpose, Up   
+   Transpose, Up   
 -- one-of-a kind dyadic functions
 local Attach, Attach1, Compress, Compress1, Deal, Decode, Drop, Encode, 
-   Expand, Expand1, Find, Format, Has, Get, MatDiv, Reshape, Rotate, 
-   Rotate1, Same, Take, Unsquish 
+   Expand, Expand1, Find, Format, Has, Get, MatDiv, Rerank, Reshape, 
+   Rotate, Rotate1, Same, Take 
 -- monadic operators 
 local Both, Each, Outer, Reduce, Reduce1, Scan, Scan1
 -- dyadic operators
 local Inner
 -- end of forward declarations
 ]]
+
+-- Exceptional functions, i.e. not fitting into the classification
+
+local Set
 
 -- Functions that have passed quality inspection for Lua⋆APL 0.3 --
 
@@ -296,18 +373,37 @@ Binom = function(_w,_a)
    return res
    end;
 
+Both = function(f) return 
+-- Applies dyadic f term-by-term; second argument may be a scalar
+   function(_w,_a) return both(f,_w,_a,false,true) end 
+end
+
 Ceil = ceil 
 Circ = function(_w,_a) return circfunc[_a](_w) end
 
 Clone = function(_w) 
    if is_not"table"(_w) then return _w end
-   local res=rho(0,#_w)
+   local res=rho(0,shape(_w))
    set(res,1,nil,unpack(_w)) 
-   res.rows, res.cols = _w.rows, _w.cols
    return res
 end
 
+Deal = function(_w,_a)
+   local n=_w
+   argcheck(_a<=n,'pair',"can't deal ".._a.." from "..n)
+   local p=iota(n)
+   for k=0,n-1 do 
+      local j=k+random(n-k) 
+      p[k+1],p[j],_w = p[j],p[k+1],_w-1 
+   end
+   return Take(p,_a)
+end
+
 Div = function(_w,_a) return _a/_w end
+
+-- Applies monadic function to every element
+Each = function(f) return function(_w) return each(f,_w) end end
+
 Exp = exp 
 
 Fact = function(_w) 
@@ -316,7 +412,61 @@ Fact = function(_w)
    local f=1; for k=2,_w do f=f*k end; return f 
 end
 
+Find = function(_w,_a)
+   if is_not"table"(_a) then _a={_a} end
+   local past=#_a+1
+   if is_not"table"(_w) then
+      return first(function(x) return x==_w end,_a) or past
+   end
+   local lookup=invert(_a)
+   local res=Clone(_w)
+   for k=1,#res do res[k]=lookup[res[k]] or past end
+   return res
+end
+
 Floor = floor 
+
+Get = function(_w,_a)
+   checktype(_w,'table',1)
+   if is"function"(_a) then
+      local res={}          -- don't know the length in advance
+      for k in _a do res[#res+1]=_w[k] end
+      res.apl_len=#res      
+      setmetatable(res,arr_meta)
+      return res
+   end
+   if is_not"table"(_a) then return core_index(_w,_a) end
+   local n=#_a
+   local rows, cols = shape(_w) 
+   if not rows then 
+      local res=iota(n)
+      for k=1,n do res[k]=_w[_a[k]] end
+      res.rows=_a.rows
+      res.cols=_a.cols
+      return res
+   end
+   -- indexing a matrix   
+   argcheck(n<=2,2,"expected two indices, got "..n)
+   local i,j,submat = _a[1], _a[2], true
+   if is"number"(i) then i={i}; submat=false end
+   if is"number"(j) then j={j}; submat=false end
+   if i==nil then i=iota(rows) end
+   if j==nil then j=iota(cols) end
+   local l,m,n = 0,#i,#j
+   local res
+   if submat then res=rho(0,m,n) else res=rho(0,m*n) end   
+   for k in indices(cols,i,j) do l=l+1; res[l]=_w[k] end
+   return res
+end
+
+Has = function(_w,_a)
+   local t=invert(_w)
+   if is_not"table"(_a) then return t[_a] and 1 or 0 end
+   local res=like(_a)
+   for k,v in ipairs(_a) do res[k]=t[v] and 1 or 0 end
+   return res
+end
+
 Ln =  log 
 Log = log 
 Max = max 
@@ -325,10 +475,24 @@ Mod = function(_w,_a) return _w%_a end
 Mul = function(_w,_a) return _a*_w end 
 NaN = 0/0; 
 Nand = function(_w,_a) return _w~=0 and _a~=0 and 0 or 1 end
-Neg = function(_w) return -_w end
+Unm = function(_w) return -_w end
 Nor = function(_w,_a) return (_w~=0 or _a~=0) and 0 or 1 end
 Not = function(_w) if _w==0 then return 1 else return 0 end end
 Or = function(_w,_a) return (_w~=0 or _a~=0) and 1 or 0 end
+
+Outer = function(f) 
+   checktype(f,'function','f')
+   return function(_w,_a)
+      local n,m =#_w,#_a
+      local res=rho(0,m,n)
+      local k=0
+      for i=1,m do for j=1,n do
+         k=k+1; res[k] = f(_w[j],_a[i])
+      end end
+      return res
+   end
+end
+
 Pass = function() return end
 Pi = function(_w) return math.pi*_w end
 Pow = function(_w,_a) return _a^_w end
@@ -342,22 +506,138 @@ end
 
 Recip = function(_w) return 1/_w end
 
-Reshape = function (_w,_a) 
-   if is_not"table"(_w) then _w={_w} end 
-   local len1 = #_w 
-   local len2 = is"table"(_a) and #_a or 1
-   local n = extent(_a)
-   argcheck(len1>0 or n==0, 1, "empty vector given")
-   if len2==0 then return _w[1] end                   -- scalar requested
-   local res=rho(_w[1],n)
-   if not len1 then return res end               -- all elements the same
-   if len2>1 then res.rows=_a[1]; res.cols=_a[2] end  -- matrix requested
-   return set(res,1,n,unpack(_w))
+Rerank = function(_w,_a)
+   checktype(_a,'number','_a')
+   if is_not"table"(_w) then return {_w} end
+   if _a>0 then argcheck(not _w.rows,'_w',"already a matrix") end
+   if _a<0 then argcheck(_w.rows,'_w',"not a matrix") end
+   if _a==1 then return uprank(_w)
+   elseif _a==-1 then return downrank(_w)
+   elseif _a==2 then return Transpose(uprank(_w))
+   elseif _a==-2 then return downrank(Transpose(_w))
+   else argcheck(false,'_a',"valid values are ±1, ±2")
+   end
 end
 
+Reshape = function (_w,_a)
+   local res=stencil(_w,_a)
+   argcheck(res, 1, "can't reshape nil")
+   local m = shape(res)
+   local n = shape(_w)
+   if not m or not n or #res<2 or #_w<2 then return res end  
+   return set(res,1,#res,unpack(_w))
+end
+
+Reverse = function(_w,axis)
+-- The Lua programmer has access to `axis`
+   axis = axis or 2
+   argcheck(axis==1 or axis==2,'⍺','Valid values are 1 and 2')  
+   local m,n = shape(_w)
+   if not m or n==1 then return Clone(_w) end
+   if not n then res=rho(0,m); set(res,1,nil,get(_w,m,1)); return res end
+   return Rerank(Reverse(Rerank(_w,-axis)),axis)
+   end
+
+Reverse1 = function(_w) return Reverse(_w,1) end
+
 Roll = random 
+
+Rotate = function(_w,_a)
+   local m,n = shape(_w)
+   if not m then return _w end   -- not an array   
+   if not n then                 -- vector
+      res=rho(0,m)     
+      checktype(_a,'number','⍺')
+      _a=_a%m
+      if m<2 or _a==0 then return res end
+      if _a>0 then set(res,1,m-_a,get(_w,_a+1,m)) end
+      if _a<m then set(res,m-_a+1,m,get(_w,1,_a)) end
+      return res
+   end
+   local k = shape(_a)
+   if k==nil then _a = {0,_a}; k=2 end
+   argcheck(k==2,'⍺',"number or two-element array required")   
+   for k=1,2 do if _a[k]~=0 then
+      _w=Rerank(Rotate(Rerank(_w,-k),_a[k]),k) 
+   end end
+   return _w
+end
+
+Rotate1 = function(_w,_a)
+   checktype(_a,'number','⍺')
+   return Rotate(_w,{_a,0})   
+end
+
+Same = function(_w,_a) return sanitize(_a==_w) end
+
+local scan = function(_a)
+   return function(_w)
+      if #_w==0 then 
+         argcheck(unit[_a],'f',"function with no left-unit",'scan')
+         return unit[_a] 
+      end
+      local res=like(_w)
+      res[1]=_w[1]
+      for k=2,#_w do res[k]=_a(_w[k],res[k-1]) end
+      return res
+   end
+end
+Scan = spread(scan,2)
+Scan1 = spread(scan,1)
+
+Set = function(_w,_a,v)
+   checktype(_w,'table',1)
+   if is"function"(_a) then
+      local j=0
+      for k in _a do j=j+1; _w[k]=v[j] end
+      return v
+   end
+   if is"string"(_a) then 
+      error"Use rawset if you really can't do it with rho"
+   end
+   if is_not"table"(_a) then error(
+      "Index '"..tostring(_a).."' is out of range, table length is "..#_w)
+   end
+   local n=#_a
+   local rows, cols = shape(_w) 
+   if not rows then 
+      for k=1,n do _w[_a[k]]=v[k] end
+      return v
+   end
+   -- indexing a matrix   
+   argcheck(n<=2,2,"expected two indices, got "..n)
+   local i,j,submat = _a[1], _a[2], true
+   if is"number"(i) then i={i}; submat=false end
+   if is"number"(j) then j={j}; submat=false end
+   if i==nil then i=iota(rows) end
+   if j==nil then j=iota(cols) end
+   local l,m,n = 0,#i,#j 
+   for k in indices(cols,i,j) do l=l+1; _w[k]=v[l] end
+   return v
+end
+
+Shape = function(_w) 
+   if is"string"(_w) then return #_w else return arr{shape(_w)} end
+end
+
 Sign = function(_w) return _w<0 and -1 or _w>0 and 1 or 0 end 
 Sub = function(_w,_a) return _a-_w end
+
+Take = function(_w,_a)
+   local res = stencil(_w,_a,filler)
+   argcheck(res, 1, "can't take nil") 
+   if is_not"table"(_w) then _w=rho(_w,1,1) end
+   local m,n = shape(res)
+   local p,q = shape(_w)
+   local a,b = _a
+   if is"table"(_a) then a,b = unpack(_a) end
+   argcheck(q or not b,1,"can't take a matrix from a vector")
+   local i,j,k,l
+   m,i,k = adjustindex(p,a)
+   if (not b) then res[iota(m,k)] = _w[iota(m,i)]; return res end
+   n,j,l = adjustindex(q,b)
+   res[{iota(m,k),iota(n,l)}] = _w[{iota(m,i),iota(n,j)}]; return res
+end
 
 TestEq = function(_w,_a) return _a==_w and 1 or 0 end; 
 TestGE = function(_w,_a) return _a>=_w and 1 or 0 end
@@ -365,6 +645,30 @@ TestGT = function(_w,_a) return _a>_w and 1 or 0 end
 TestLE = function(_w,_a) return _a<=_w and 1 or 0 end
 TestLT = function(_w,_a) return _a<_w and 1 or 0 end
 TestNE = function(_w,_a) return _a~=_w and 1 or 0 end
+
+Transpose = function(_w)
+   local rows,cols = shape(_w)
+   if not cols then return Clone(_w) end
+   local res=rho(0,cols,rows)
+   transpose(_w,rows,cols,res)
+   return res
+end   
+
+-- Works for vectors but not matrices
+
+local reduce = function(_a)
+   return function(_w)
+      if #_w==0 then 
+         argcheck(unit[_a],'f',"function with no left-unit",'scan')
+         return unit[_a] 
+      end
+      local res=_w[1]
+      for k=2,#_w do res=_a(_w[k],res) end
+      return res
+   end
+end
+Reduce = reduce
+Reduce1 = reduce  
 
 -- Functions that have not passed quality inspection for Lua⋆APL 0.3 --
 
@@ -408,17 +712,6 @@ Compress = function(_w,_a)
 end
 Compress1 = function(_w,_a) return Transpose(Compress(Transpose(_w),_a)) end
 
-Deal = function(_w,_a)
-   local n=_w
-   argcheck(_a<=n,'pair',"can't deal ".._a.." from "..n)
-   local p=Range(n)
-   for k=0,n-1 do 
-      local j=k+random(n-k) 
-      p[k+1],p[j],_w = p[j],p[k+1],_w-1 
-   end
-   return Take(p,_a)
-end
-
 Decode = function(_w,_a)
    local res,d=arr{}   
    checktype(_w,'number','_w')
@@ -440,11 +733,6 @@ Drop = function(_w,_a)
    return res
 end
 
-Each = function(f) return function(_w) return each(f,_w) end end
-Both = function(f) return 
-   function(_w,_a) return both(f,_w,_a,false,true) end 
-end
-
 --[[
       if _a then checksize(_a,_w,1,'Each') else _a={} end
       local res=Clone(_w)
@@ -453,12 +741,6 @@ end
    end
 end
 --]]
-
-Has = function(_w,_a)
-   local res,t=arr{},invert(_w)
-   for k,v in ipairs(_a) do res[k]=t[v] and 1 or 0 end
-   return res
-end
 
 Encode = function(_w,_a)
    local res=0
@@ -478,11 +760,6 @@ Expand = function(_w,_a)
 end
 Expand1 = function(_w,_a) return Transpose(Expand(Transpose(_w),_a)) end
    
-Find = function(_w,_a)
-   if is_not"table"(_a) then _a={_a} end
-   return first(function(x) return x==_w end,_a) or #_a+1
-end
-
 -- Format is defined after the A-Z group
 
 Up = function(_w) 
@@ -496,42 +773,6 @@ Down = function(_w)
    local x=Range(#_w)
    return sort(x,function(a,b) return _w[a]>_w[b] end)
    end;
-
-Get = function(_w,_a)
-   checktype(_w,'table',1)
-   if is"function"(_a) then
-      local res={}          -- don't know the length in advance
-      for k in _a do res[#res+1]=_w[k] end
-      res.apl_len=#res
-      setmetatable(res,arr_meta)
-      return res
-   end
-   if is_not"table"(_a) then return core_index(_w,_a) end
-   local n=#_a
-   local rows, cols = _w.rows, _w.cols 
-   if not rows then 
-      local res=iota(n)
-      for k=1,n do res[k]=_w[_a[k]] end
-      res.rows=_a.rows
-      res.cols=_a.cols
-      return res
-   end
-   -- indexing a matrix   
-   argcheck(n<=2,2,"expected two indices, got "..n)
-   local i,j,submat = _a[1], _a[2], true
-   if is"number"(i) then i={i}; submat=false end
-   if is"number"(j) then j={j}; submat=false end
-   if i==nil then i=iota(rows) end
-   if j==nil then j=iota(cols) end
-   local l,m,n = 0,#i,#j
-   local res=iota(m*n)
-   for k in indices(cols,i,j) do l=l+1; res[l]=_w[k] end
-   if submat then res.rows=#i; res.cols=#j end
-   return res
-end
-
-Set = function(_w,_a,v)
-end
 
 Inner = function(f1,f2) 
    if f1==Pass then return Outer(f2) end
@@ -548,140 +789,6 @@ Inner = function(f1,f2)
    end
 end
 
-Outer = function(f) return 
-   function(_w,_a)
-      local n,m =#_w,#_a
-      local res=rho(0,m,n)
-      local k=0
-      for i=1,m do for j=1,n do
-         k=k+1; res[k] = f(_w[j],_a[i])
-      end end
-      return res
-   end
-end
-
-local reduce = function(_a)
-   return function(_w)
-      if #_w==0 then 
-         argcheck(unit[_a],'f',"function with no left-unit",'scan')
-         return unit[_a] 
-      end
-      local res=_w[1]
-      for k=2,#_w do res=_a(_w[k],res) end
-      return res
-   end
-end
-Reduce = reduce
-Reduce1 = reduce  
-
-Reverse = function(_w) 
-   if not is"table"(_w) then return _w end
-   _w=Clone(_w)
-   local m,n,j = _w.rows or 1, _w.cols or #_w, 0
-   for k=1,m do move(_w,j+1,j+n,j+n,j+1); j=j+n end
-   return _w
-   end;
-
-Reverse1 = function(_w)
-   if not is"table"(_w) then return _w end
-   if not _w.rows then return Reverse(_w) end
-   return Transpose(Rev(Transpose(_w)))
-end
-
-Rotate = function(_w,_a)
-   if not is"table"(_w) then return _w end
-   local m,n,j = _w.rows or 1, _w.cols or #_w, 0
-   _a=Mod(_a,n)
-   local res=Clone(_w)
-   for k=1,m do 
-      if _a>0 then set(res,j+1,j+n-_a,get(_w,j+_a+1,j+n)) end
-      if _a<n then set(res,j+n-_a+1,j+n,get(_w,j+1,j+_a)) end
-      j=j+n
-   end
-   return res
-end
-
-Rotate1 = function(_w,_a)
-   if not is"table"(_w) then return _w end
-   if not _w.shape then return Rotate(_w,_a) end
-   return Transpose(Rot(Transpose(_w),_a))
-end
-
-Same = function(_w,_a)
-   return sanitize(_a==_w)
-end
-
-local scan = function(_a)
-   return function(_w)
-      if #_w==0 then 
-         argcheck(unit[_a],'f',"function with no left-unit",'scan')
-         return unit[_a] 
-      end
-      local res=Reshape(_w[1],#w)
-      for k=2,#_w do res[k]=_a(_w[k],res[k-1]) end
-      return res
-   end
-end
-Scan = scan
-Scan1 = scan
-
-Shape = function(_w) 
-   if is"table"(_w) then
-      if _w.shape then return _w.shape else return arr{#_w} end
-   elseif is"number"(_w) then return arr{}
-   elseif is"string"(_w) then return #_w
-   end
-end
-
-
-Squish = function(_w) 
-   if is_not"table"(_w) then return end
-   local j,m = first(is'table',_w),#_w 
-   if not j then return Clone(_w) end
-   local n=#_w[j]
-   local culprit = first(is_not'table',_w)
-         or first(function(x) return #x~=n end,_w)
-   if culprit then argcheck(false,'_w',
-      'row '..culprit..' and row '..j..' have different length')
-   end
-   local res=rho(0,m*n)
-   res.rows, res.cols = m,n
-   local j=0
-   for i=1,m do set(res,j+1,j+m,get(_w[i],1,n)); j=j+n end
-   return res
-end
-    
-Take = function(_w,_a)
-   if not is"table"(_w) then _w={_w} end
-   local len,given,res = abs(_a),#_w,arr{}
-   if len<1 then return res end
-   set(res,1,len,0)
-   local n=Min(len,given)
-   if _a<0 then set(res,len,len-n+1,get(_w,given,given-n+1))
-   else set(res,1,n,get(_w,1,n))
-   end
-   return res
-end
-
-Transpose = function(_w)
-   local s=is_matrix(_w)
-   return s and arr(transpose(_w,s[1],s[2],{shape={s[2],s[1]}}))
-      or Clone(_w)
-end   
-
-Unsquish = function(_w)
-   if is_not"table"(_w) then return _w end
-   local rows, cols = _w.rows, _w.cols
-   if not cols then return Clone(w) end
-   local i0=0
-   local res=rho(0,rows)
-   for i=1,rows do
-      res[i]=set(rho(0,cols),1,nil,get(_w,i0+1,i0+cols))
-      i0=i0+cols
-   end 
-   return res
-end
-   
 do -- Format
 
 local function aplformat(f)
@@ -727,7 +834,7 @@ end
 function Format(_w,_a, level)
    _a = _a or apl._format or "%.7g"
    level=level or 1
-   if _a=="raw" or level>2 then return rawformat(_w) end   
+   if _a=="raw" or level>1 then return rawformat(_w) end   
    if is"number"(_a) then _a=aplformat(_a) end
     if _w==nil then return "_" end   
    if is"string"(_w) then return _w end
@@ -772,7 +879,7 @@ local num1, num2, gen1, gen2, op1, op2
 -- If you like, ask your text editor to reformat the paragraphs.
 
 num1={Abs=Abs, Ceil=Ceil, Exp=Exp, Fact=Fact, Floor=Floor, Ln=Ln,
-  Neg=Neg, Not=Not, Pi=Pi, Recip=Recip, Roll=Roll, Sign=Sign}
+  Unm=Unm, Not=Not, Pi=Pi, Recip=Recip, Roll=Roll, Sign=Sign}
 
 num2={Add=Add, And=And, Binom=Binom, Circ=Circ, Div=Div, Log=Log,
   Max=Max, Min=Min, Mod=Mod, Mul=Mul, Nand=Nand, Nor=Nor, Or=Or, Pow=Pow,
@@ -781,14 +888,14 @@ num2={Add=Add, And=And, Binom=Binom, Circ=Circ, Div=Div, Log=Log,
 
 gen1={Clone=Clone, Down=Down, MatInv=MatInv, Pass=Pass, Range=Range,
   Ravel=Ravel, Reverse=Reverse, Reverse1=Reverse1, Shape=Shape,
-  Squish=Squish, Transpose=Transpose, Up=Up}
+  Transpose=Transpose, Up=Up}
 
 gen2={Attach=Attach, Attach1=Attach1, Compress=Compress,
   Compress1=Compress1, Deal=Deal, Decode=Decode, Drop=Drop,
   Encode=Encode, Expand=Expand, Expand1=Expand1, Find=Find,
-  Format=Format, Has=Has, Get=Get, MatDiv=MatDiv, Reshape=Reshape,
-  Rotate=Rotate, Rotate1=Rotate1, Same=Same, Take=Take,
-  Unsquish=Unsquish}
+  Format=Format, Has=Has, Get=Get, MatDiv=MatDiv, Rerank=Rerank,
+  Reshape=Reshape, Rotate=Rotate, Rotate1=Rotate1, Same=Same, Set=Set, 
+  Take=Take }
 
 op1={Both=Both, Each=Each, Outer=Outer, Reduce=Reduce, Reduce1=Reduce1, 
   Scan=Scan, Scan1=Scan1}
@@ -818,15 +925,8 @@ end
 
 local function reverse(f) return function(_w,_a) return f(_a,_w) end end
 arr_meta.__tostring = Format 
-arr_meta.__add = Add
-arr_meta.__sub = reverse(Sub)
-arr_meta.__mul = apl.Mul
-arr_meta.__div = reverse(Div)
-arr_meta.__mod = reverse(Mod)
-arr_meta.__pow = reverse(Pow)
-arr_meta.__unm = Neg
-arr_meta.__concat = reverse(Attach)
 arr_meta.__index = Get
+arr_meta.__newindex = Set
 
 -- Exceptions
 
@@ -904,21 +1004,21 @@ help = function(...)
 -- `topic` is string: Prints predefined help on the topic, if any. 
 -- `topic` is "all": Prints available topics. For example, 
 --    `help"customize" tells how to add your own help topics.
-   local s = ...
+   local s, mod = ...
    if not s then 
       helpnil=helpnil+1
-      if helpnil==1 then 
-         print "apl(), help'all', help(apl), help(help)"
-      elseif helpnil>1 and select('#',...)>0 then
+      if helpnil==1 and select('#',...)==0 then 
+         print "Cut-and-paste this: apl(); help'all'; help(apl); help(help)"
+      elseif select('#',...)>0 then
          print "That's nil. Import it first, or use the table name." 
       elseif helpnil>5 then 
          print"`help'start'` retypes startup help."
-      else basichelp'start'
+      else return basichelp'start'
       end
       return
    end
    if not(s==s) then print(helpNaN) return end
-   basichelp(...)
+   return basichelp(...)
 end
 
 do local _ENV=apl ----------------------------------------------------------
@@ -958,11 +1058,19 @@ help(Mul,"Mul: ⍺×⍵")
 help(Set,"Set: ⍵[⍺]←v, see `help'Indexing'")
 help(Nor,"Nor: ⍺⍱⍵ → 1 only if both ⍺ and ⍵ are 0, else 0")
 help(Pi,"Pi: ○⍵ → math.pi times ⍵")
-help(Power,"Power: ⍺^⍵")
+help(Pow,"Pow: ⍺^⍵")
 help(Range,"Range: ⍳⍵ → {1,2,...,⍵}") 
 help(Ravel,"Ravel: ,⍵ → vector containing elements of ⍵")
 help(Reduce,"Reduce: ⍺/⍵ → copies elements or columns of ⍵ as counted by ⍺")
 help(Reduce1,"Reduce: ⍺⌿⍵ → copies elements or rows of ⍵ as counted by ⍺")
+help(Rerank,[[
+Rerank: ⍺⎕⍵ → array of one rank higher or lower
+   1⎕⍵ → matrix whose rows are elements of ⍵
+  ¯1⎕⍵ → vector whose elements are rows of ⍵
+   2⎕⍵ → matrix whose columns are elements of ⍵
+  ¯2⎕⍵ → vector whose elements are columns of ⍵
+If ⍺>0, each ⍵[i] is treated as a vector and padded to the maximum length
+   with zeros or empty strings. ]])
 help(Reshape,"Reshape: ⍺⍴⍵ → Make an array of shape ⍺ by using ⍵ cyclically")
 help(Reverse,"Reverse: ⌽⍵ → elements or columns of ⍵ in reverse order")
 help(Reverse1,"Reverse1: ⌽⍵ → elements or rows of ⍵ in reverse order")
@@ -975,8 +1083,8 @@ help(Shape,[[
 Shape: ⍴⍵ → {} if a number, {#⍵} if a vector, {rows,cols} if a matrix.
        #⍵ if a string.]])
 help(Sign,"Sign: ×⍵ is ¯1,0,1 according to whether ⍵ is <0, =0, >0")
-help(Squish,[[Squish: ⌷⍵ → convert nested array to matrix.]])
 help(Sub,"Sub: ⍺-⍵")
+help(Take,"Take: ⍺↑⍵ → The first ⍺ or last -⍺ elements of ⍵")   
 help(TestEq,"TestGE: ⍺=⍵")
 help(TestGE,"TestGE: ⍺≥⍵")
 help(TestGT,"TestGE: ⍺>⍵")
@@ -984,7 +1092,6 @@ help(TestLE,"TestLE: ⍺≤⍵")
 help(TestLT,"TestLT: ⍺<⍵")
 help(TestNE,"TestGE: ⍺≠⍵")
 help(Transpose,'Transpose: ⍉⍵ → matrix transpose of ⍵')
-help(Unsquish,[[Unsquish: ⌻⍵ → convert matrix to nested array.]])
 help(Up,"Up: ⍋⍵ → the permutation that grades ⍵ upwards")
 
 end ---------------- _ENV apl --------------------------------------------
@@ -1038,7 +1145,6 @@ apl.util = {argcheck=argcheck, checktype=checktype, logfile=logfile,
 
 -- welcome message
 
-if debugging then apl._format='raw' end
 logfile:write [[  
    BUGS: 
 1. Only halfway into implementing new version.

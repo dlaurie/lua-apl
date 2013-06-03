@@ -75,10 +75,10 @@ function: 0x815d7e0 function: 0x8168248</code></pre>
 <p>For term-by-term operations (<code>op=1</code>), a one-row and a one-column matrix are not compatible with each other, but either is compatible with a vector of the same length. For matrix multiplication, row or column scaling, etc., a vector <code>a</code> or <code>b</code> is compatible if a one-row or one-column matrix (respectively) would be.</p>
 <h3 id="expandfa1a2x1x2"><code>expand(f,a1,a2,x1,x2)</code></h3>
 <p>Applies the dyadic function <code>f</code> term-by-term to the elements of <code>a1</code> and <code>a2</code>. Singleton arguments in either position are considerd to be compatible as specified by the boolean values <code>x1</code> and <code>x2</code>. The shape of the result is taken from <code>a1</code> by preference; if <code>a1</code> has no shape, it is taken from <code>a2</code>.</p>
-<h3 id="iotan"><code>iota(n)</code></h3>
-<p>Returns an APL vector containing the first <code>n</code> integers.</p>
-<h3 id="rhovn"><code>rho(v,n)</code></h3>
-<p>Returns an APL vector containing <code>n</code> copies of <code>v</code>.</p>
+<h3 id="iotanstart1"><code>iota(n[,start=1])</code></h3>
+<p>Returns an APL vector containing the first <code>n</code> integers from the given start.</p>
+<h3 id="rhovmn"><code>rho(v,m[,n])</code></h3>
+<p>Returns an APL vector of length <code>m</code>, or an APL matrix of shape <code>m×n</code>, filled with copies of <code>v</code>.</p>
 <h2 id="other-functions">Other functions</h2>
 <h3 id="keepcount..."><code>keep(count,...)</code></h3>
 <p>Returns <code>count</code> arguments, starting at the first extra argument. As in the case of <code>select</code>, a negative number indexes from the end (-1 is the last argument).</p>

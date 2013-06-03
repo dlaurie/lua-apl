@@ -16,7 +16,7 @@ local argcheck,      checktype,      is,      is_not =
 
 -- This is kept in while the program is under development
 
-loading=true
+local loading=true
 local logfile = util.logfile
 
 local meta_ENV=getmetatable(_ENV)
@@ -36,8 +36,9 @@ end
 -------- APL compiler
 
 local monadic_functions, monadic_operators, dyadic_functions, 
-   dyadic_operators, APL_ENV
-  = {},{},{},{},{}
+   dyadic_operators = {},{},{},{}
+local _V = setmetatable({},{__index=_ENV})
+local APL_ENV = {_V=_V}
 
 local lookup = function(tbl) 
 --- Cmt function that succeeds when key is in tbl, returning
@@ -77,15 +78,15 @@ local dyadic_function = _s^0*Cmt(name,lookup(dyadic_functions))*_s^0
 local dyadic_operator = _s^0*Cmt(name,lookup(dyadic_operators))*_s^0
 local operator = monadic_operator + dyadic_operator
 local funcname = monadic_function + dyadic_function
-local varname = _s^0*C(first*later^0+utf-funcname-operator)*_s^0
-local param = _s^0*(P'⍺'/'_a' + P'⍵'/'_w')*_s^0 -- not to be looked up in _V
+local Param = _s^0*(P'⍺'/'_a' + P'⍵'/'_w')*_s^0 -- not to be looked up in _V
+local Var = _s^0*C(first*later^0+utf-funcname-operator)*_s^0 - Param
 local aplstr = _s^0*"'"*(1-P"'")^0*"'"*_s^0 -- non-empty
 
 local apl_expr = P{ "expr";
    expr = 
-     (param/1*'←'*V"expr")/"set%1(%2)" +
-     (varname-param)*'←'*V"expr"/"Assign(%2,'%1')" + 
-     (varname-param)*"["*V"indices"*"]"*'←'*V"expr"/"Assign(%3,'%1',%2)" +
+     Param/1*'←'*V"expr"/"set%1(%2)" +
+     Var*'←'*V"expr"/"Assign(%2,'%1')" + 
+     Var*"["*V"indices"*"]"*'←'*V"expr"/"Assign(%3,'%1',%2)" +
      V'leftarg'*V'dyadic_func'*V'expr'/"%2(%3,%1)" +
      V'monadic_func'*V'expr'/"%1(%2)" +
      V"leftarg";
@@ -94,8 +95,9 @@ local apl_expr = P{ "expr";
    monadic_func = dyadic_function*monadic_operator/"%2(%1)" + 
       monadic_function;
    leftarg = V"value" + '('*V"expr"*')'/1;
-   value = param + vector/numbers + aplstr/1 +
-      (varname*'['*V"indices"*']'/"%1[%2]" + varname)/"_V.%1";
+   value = vector/numbers + aplstr/1 +
+      (Var*'['*V"indices"*']'/"%1[%2]" + Var)/"_V.%1" + 
+      (Param*'['*V"indices"*']'/"%1[%2]" + Param)/1;
    index = V"expr"+_s^0/"nil";
    indices = V"index"*';'*V"index"/"{%1;%2}" + V"expr";
    }
@@ -128,7 +130,7 @@ local register = function (class, fct, APLname, LuaName, alias, helptext)
 --   LuaName: the Lua name
 --   alias: an alternative APL name (optional)
 --   help: help text accessible via the function itself 
-   cname=classname[class]
+   local cname=classname[class]
    class=classes[class]
    argcheck(class,1,"Must be 1,2,5 or 6")
    checktype(APLname,'string',3)
@@ -165,8 +167,9 @@ local function seta(v) _a=v return v end
 local function setw(v) _w=v return v end 
 ]]
 
-load_apl = function(_w)
+local load_apl = function(_w)
    checktype(_w,'string',1)
+   if _w:match"^@" then return APL_ENV[_w:sub(2)] end
    _w = _w:gsub("⍝[^\n]*","\n")  -- strip off APL comments
    local lua = apl2lua(_w)
    if select(2,_w:gsub('⋄',''))==0 then
@@ -206,7 +209,7 @@ local f2={Add='+', And='∧', Binom='!', Circ='○', Div='÷', Log='⍟', Max='�
   Format='⍕', Has='∊', --[[MatDiv='⌹',]] Pass='∘', Reshape='⍴', Rotate='⌽',
   Rotate1='⊖', Same='≡', Take='↑', Unsquish='⌻'}
 
-local op1={Each='¨', Reduce='/', Reduce1='⌿', Scan='\\', Scan1='⍀'}
+local op1={Reduce='/', Reduce1='⌿', Scan='\\', Scan1='⍀'}
 
 local op2={Inner='.'}
 
@@ -224,6 +227,27 @@ end
 
 build(f1,1); build(f2,2); build(op1,5); build(op2,6);
 
+-- Assignment
+
+APL_ENV.Assign = function(_w,_a,ij)
+   argcheck(_w,'⍵',"Can't assign nil to an APL name","Assign")  
+   if is"function"(_w) then
+      register(1,_w,_a,_a,nil,help(_w,0))
+      register(2,_w,_a,_a,nil,help(_w,0))
+      return _a
+   end
+   local global_name = _a:match"_(.+)"      -- global assignment? If so,
+   _a = global_name or _a                   -- strip off one underscore.
+   local ENV = global_name and _ENV or _V   -- Select namespace
+   if not ij then 
+      ENV[_a]=_w 
+      return _w 
+   end
+   _a = ENV[_a]; checktype(_a,'table','_a')
+   _a[ij]=_w   
+   return _w 
+end
+
 -------- Add the new functions
 
 apl.lua = lua_code
@@ -234,12 +258,14 @@ register(1,load_apl,'∇','Define',nil,
 register(1,function(_w) return load_apl(_w)() end,'⍎','Execute',nil,
   "Execute: ⍎⍵ → Define(⍵)()")
 
+
 -- clean up
 
 getmetatable(apl).__call =
    function(apl,env)
       env = env or _ENV
       env.help = apl.help
+      env.lua = apl.lua
       env.Define = apl.Define
       env.Execute = apl.Execute
    end

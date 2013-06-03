@@ -381,11 +381,11 @@ static int apl_index(lua_State *L) {
   lua_rawget(L,1);
   return 1;
 }
+/* New-indexing. The Lua module catches accesses via table and function 
+ * keys. To get here is always an error. Use rawset if you really must.
+ */
 static int apl_newindex(lua_State *L) {
-  luaL_argcheck(L,lua_type(L,2)!=LUA_TNUMBER,2,"index out of range");
-  luaL_checktype(L,2,LUA_TSTRING);
-  luaL_checktype(L,1,LUA_TTABLE);
-  lua_rawset(L,1);
+  luaL_argerror(L,2,"attempt to create new element in APL array");
   return 0;
 }
 
@@ -421,19 +421,28 @@ static int apl_rho(lua_State *L) {
   lua_settop(L,1);
   core_new(L,len,1);
   if (m>=0) { 
-    lua_pushinteger(L,m); lua_setfield(L,2,"rows"); 
-    lua_pushinteger(L,n); lua_setfield(L,2,"cols"); 
+    lua_pushstring(L,"rows"); lua_pushinteger(L,m); lua_rawset(L,2); 
+    lua_pushstring(L,"cols"); lua_pushinteger(L,n); lua_rawset(L,2); 
   }
   return 1;
 }
 
 /* iota(n) */
 static int apl_iota(lua_State *L) {
-  int i, len=luaL_checkint(L,1);
+  int i=0, j, len=luaL_checkint(L,1);
   luaL_argcheck(L,len>=0,1,"must be a non-negative integer");
+  if (!lua_isnoneornil(L,2)) { i=luaL_checkint(L,2)-1; }
   lua_settop(L,0);
   lua_pushnil(L);  
   core_new(L,len,1);
+  if (i!=0) {
+    int t=lua_gettop(L); for (j=1; j<=len; j++) {
+      lua_rawgeti(L,t,j); 
+      lua_pushinteger(L,lua_tointeger(L,-1)+i);
+      lua_rawseti(L,t,j);
+      lua_pop(L,1);
+    }
+  }
   return 1;
 }
 

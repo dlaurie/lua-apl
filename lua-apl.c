@@ -19,7 +19,8 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-#define LUA_APL_VERSION "Lua⋆APL 0.2.0"
+#define LUA_APL_VERSION "Lua⋆APL 0.3.0"
+#define LUA_APL_COPYRIGHT " © Dirk Laurie 2013"
 
 #if !defined(LUA_PROMPT)
 #define LUA_PROMPT		"> "
@@ -185,11 +186,11 @@ static int docall (lua_State *L, int narg, int nres) {
   return status;
 }
 
-
 static void print_version (void) {
   luai_writestring(LUA_COPYRIGHT, strlen(LUA_COPYRIGHT));
   luai_writeline();
   luai_writestring(LUA_APL_VERSION, strlen(LUA_APL_VERSION));
+  luai_writestring(LUA_APL_COPYRIGHT, strlen(LUA_APL_COPYRIGHT));
   luai_writeline();
 }
 
@@ -261,23 +262,30 @@ static int incomplete (lua_State *L, int status) {
   return 0;  /* else... */
 }
 
+/* Guess, based on its first line, whether a chunk is APL. 
+   For minimal changes to a line causing a wrong guess, put `∘` (APL, 
+   don't print), `⍕` (APL, please print), `=` (Lua, please print) in 
+   front of it.
+   */
 static int guess_apl(char* b) {
-  char *c, *Lua="ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijklmnpqrstuvwxyz(";
-  int alpha=0, nonascii=0;
+  int k;
+/* Possible characters at the start of an executable Lua statement */
+  char *Lua="ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijklmnpqrstuvwxyz(";
+/* Words that could be present when an APL string literal is used in Lua */
+  char *c, *Lua_Marker[] = {"apl","Define","Execute","return","print"};
+/* Skip blanks */
   while (*b==' ') b++;
-  if (*b==0) return 0; 
-/* If it starts with '=' or "return": Lua */
-  if (*b=='=' || strncmp(b,"return",6)==0) return 0;
-/* If it does not start with an alpha or left parenthesis: APL */
-  if (strchr(Lua,*b)==0) return 1;
-/* If a double-quote or "apl." is found anywhere: Lua */
-  if (strchr(b,'"') || strstr(b,"apl.")) return 0;
-/* If an APL separator or diamond is found anywhere: APL */
-  if (strstr(b,"⋄") || strstr(b,"⍝")) return 1;
-/* If non-ASCII outnumbers alpha: APL */
-  for (c=b;*c;c++) if ( (*c>='A'&&*c<='Z') || (*c>='a'&&*c<='z')) alpha++; 
-  else if (*c<0 || *c>127) nonascii++;
-  return nonascii>alpha;
+  if (strlen(b)<2) return 0; 
+/* If it is a Lua comment, has '=' shortcut, or contains a Lua marker: Lua */
+  for (k=0; k<sizeof(Lua_Marker)/sizeof(char*); k++) {
+    if ((b[0]=='-' && b[1]=='-') || b[0]=='=' || strstr(b,Lua_Marker[k])) 
+      return 0;
+  }
+/* If it starts with an impossible character: APL */
+  if (strchr(Lua,*b)==0) return 1; 
+/* If it contains anything except printable ASCII characters: APL */ 
+  for (c=b; *c; c++) if (*c<32 || *c>127) return 1;
+return 0;
 }
 
 static int pushline (lua_State *L, int firstline) {
@@ -293,7 +301,7 @@ static int pushline (lua_State *L, int firstline) {
   if (l > 0 && b[l-1] == '\n')  /* line ends with newline? */
     b[l-1] = '\0';  /* remove it */
   if (firstline && guess_apl(b))  /* does this look like raw APL ? */  
-    lua_pushfstring(L, "return Execute\"%s\"", b); 
+    lua_pushfstring(L, "return apl\"%s\"()", b); 
   else if (firstline && b[0] == '=')  /* first line starts with `=' ? */
     lua_pushfstring(L, "return %s", b+1);  /* change it to `return' */
   else
@@ -503,7 +511,10 @@ static int pmain (lua_State *L) {
 
 int main (int argc, char **argv) {
   int status, result, k;
-  char *myarg[argc+5], *arg[]={"-l","apl-compiler","-e","apl=require'apl-compiler'; apl()","-i"};
+  char *myarg[argc+5], *arg[]={
+    "-l","apl-compiler",
+    "-e","apl=require'apl-compiler'; apl:import()",
+    "-i"};
   if (argc>1) {
     printf("Error: lua-apl does not accept extra command-line arguments\n");
     return EXIT_FAILURE;

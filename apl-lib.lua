@@ -55,9 +55,10 @@ logfile:setvbuf"no"
 
 local meta_ENV=getmetatable(_ENV)
 setmetatable(_ENV,{__newindex = function (ENV,name,value)
-   if name:match"^%a%d?$" then logfile.write(where(2),
-      "A global name like '",name,"' is asking for trouble.\n")
-   end
+logfile:write(where(2),"Assigning _ENV.",name,"\n")
+--   if name:match"^%a%d?$" then logfile.write(where(2),
+--      "A global name like '",name,"' is asking for trouble.\n")
+--   end
    rawset(ENV,name,value)
 end})
 
@@ -79,7 +80,8 @@ local loading=true   -- set to false when the module returns
 -- the Programmer's Guide.
 
 local argcheck, arr, checksize, checktype, core_index, core_newindex,
-   extent, indices, is, is_int, is_not, sanitize, shape, sort
+   extent, filler, first, indices, invert, is, is_int, is_not, sanitize, 
+   shape, singleton, sort, sum
 local NaN = 0/0
 
 local adjustindex = function (p,a)
@@ -88,9 +90,6 @@ local adjustindex = function (p,a)
    if a>=0 then i,j=1,1 else i,j=p-n+1,abs(a)-n+1 end
    return n,i,j
 end
-
-arr_meta = getmetatable(rho(0,0))
-local core_index, core_newindex = arr_meta.__index, arr_meta.__newindex
 
 -- All argument-check routines prefer the actual called name;
 -- the optional last parameter is a fallback when no such name
@@ -109,6 +108,8 @@ arr = function(_w)
    rawset(_w,'apl_len',#_w)
    return setmetatable(_w,arr_meta) 
 end
+
+arr_meta = getmetatable(rho(0,0))
 
 checksize = function(A,B,op,name)
 -- If op=1, check term-by-term compatibility
@@ -129,7 +130,7 @@ checktype = function(val,typ,pos,name)
    end
 end
 
-core_index, core_newindex = arr_meta.__index, arr_meta.__newindex
+local core_index, core_newindex = arr_meta.__index, arr_meta.__newindex
 
 -- number of elements implied by shape
 extent = function(shape)
@@ -149,6 +150,9 @@ filler = function(x)
    if is"string"(x) then return '' else return 0 end
 end
 
+first = function(fct,tbl) return pick(tbl,1,#tbl,fct) end
+--- first(fct,tbl): The first index in tbl where fct returns true.
+
 -- iterator for actual indices in a matrix slice
 indices = function(n,i,j)
    local ni,nj = #i,#j
@@ -163,6 +167,14 @@ indices = function(n,i,j)
    end
 end    
 
+invert = function(_w) 
+--- invert(tbl): Switches keys and values in a table.  
+-- Return value is just a table, not an APL array.
+   local t={} 
+   for k,v in ipairs(_w) do t[v]=k end 
+   return t
+end
+
 -- non-error type check
 is = function(typ) return function(x) return type(x)==typ end end
 is_int = core.is_int 
@@ -174,6 +186,25 @@ local like = function(w,v)
    v=v or filler(w)
    if not m then return v end
    return rho(v,m,n)
+end
+
+sanitize = function(_w)
+   if is"string"(_w) then return arr{_w:byte(1,-1)} end
+   if is"boolean"(_w) then return _w and 1 or 0 end
+   if is"nil"(_w) then return NaN end
+   return _w
+end
+
+shape = function(x) 
+   if is"table"(x) then 
+      local r,c = rawget(x,'rows'), rawget(x,'cols')
+      if c then return x.r, x.c else return #x end
+   end
+end
+
+singleton = function(x)
+   if is_not"table"(x) then return x end
+   if #x==1 then return x[1] end
 end
 
 do -- sort package
@@ -203,16 +234,12 @@ sort = function( array, precedes )
 end
 end -- of sort package
 
-sanitize = function(_w)
-   if is"string"(_w) then return arr{_w:byte(1,-1)} end
-   if is"boolean"(_w) then return _w and 1 or 0 end
-   if is"nil"(_w) then return NaN end
-   return _w
-end
-
-shape = function(x) if is"table"(x) then 
-   if x.cols then return x.rows, x.cols else return #x end end
-end
+sum = function(x)
+   if is_not"table"(x) then return x end
+   local s=0
+   for _,v in ipairs(x) do s=s+v end
+   return s
+end   
 
 local unsanitize = function(_w,_a)
    if _a==2 then 
@@ -222,16 +249,7 @@ local unsanitize = function(_w,_a)
    return _w
 end
 
-local first = function(fct,tbl) return pick(tbl,1,#tbl,fct) end
---- first(fct,tbl): The first index in tbl where fct returns true.
-
-local invert = function(_w) 
---- invert(tbl): Switches keys and values in a table.  
--- Return value is just a table, not an APL array.
-   local t={} 
-   for k,v in ipairs(_w) do t[v]=k end 
-   return t
-end
+---
 
 local circfunc = {
    [0] = core.circ0; -- sqrt(1-_w^2)
@@ -251,7 +269,60 @@ local circfunc = {
    [-7] = core.atanh;
 }
 
-do -------------  LuaAPL functions A-Z  -------------------------------
+do --- primitive vector functions and auxiliary functions
+
+local compress = function(_w,_a)
+   if is_not"table"(_w) then _w={_w} end
+   local n,v = 1,_a
+   local ista = is"table"(_a)
+   if ista then
+     n=#_a
+     if n==1 then v=_a[1]; ista=false
+     else checksize(_w,_a,1,"Compress")
+     end
+   end 
+   local res=rho(0,sum(_a))
+   n=0
+   for k,wk in ipairs(_w) do       
+      if ista then v=_a[k] end
+      if v>0 then set(res,n+1,n+v,wk); n=n+v end      
+   end
+   return res
+end
+
+local expand = function(_w,_a)
+   if is_not"table"(_w) then _w={_w} end
+   local m,n,v = 1,1,_a
+   local ista = is"table"(_a)
+   if ista then
+     n=#_a
+     if n==1 then v=_a[1]; ista=false
+     else checksize(_w,_a,1,"Compress")
+     end
+   end 
+   if not ista then m=#_w*v else m=sum(_a) end
+   local res=rho(0,#_w+m)
+   n=0
+   for k,wk in ipairs(_w) do       
+      if ista then v=_a[k] end
+      if v>0 then set(res,n+1,n+v,filler(wk)); n=n+v end
+      res[n+1]=wk; n=n+1
+   end
+   return res
+end
+
+local scan = function(f)
+   return function(_w)
+      if #_w==0 then 
+         argcheck(unit[f],'f',"function with no left-unit",'scan')
+         return unit[f] 
+      end
+      local res=like(_w)
+      res[1]=_w[1]
+      for k=2,#_w do res[k]=f(_w[k],res[k-1]) end
+      return res
+   end
+end
 
 local downrank = function(_w)
    local rows, cols = _w.rows, _w.cols
@@ -292,10 +363,14 @@ local uprank = function(_w)
    return res
 end
 
--- If op(f) works on a vector, spread(f,k) works on a matrix along axis k
-local spread=function(f,k)
-   return function(_a) return 
-     function(_w) return Rerank(f(_a)(Rerank(_w,-2)),2) end
+--- operators on primitive vector functions
+
+-- If f works on a vector, along(f,k) works on a matrix along axis k
+local along=function(f,k)
+   return function(_w,_a) 
+      if _w.cols then return Rerank(f(Rerank(_w,-k),_a),k)
+      else return f(_w,_a)
+      end    
    end
 end
 
@@ -311,19 +386,20 @@ end
 -- hundred lines lower down. Also remember to cut-and-paste the changed 
 -- block to the string `forward` below the declarations.
 
--- numeric monadic functions
+-- monadic primitive scalar functions
 -- these functions generalize term-by-term to any array
-local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Recip, Roll, Sign, Unm
--- numeric dyadic functions
--- these functions generalize term-by-term to arrays of the same shape or
+local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Range, Recip, Roll, 
+   Sign, Unm
+-- dyadic primitive scalar functions
+-- these functions generalize term-by-term to compatible arrays or
 --   when one operand is a singleton
-local Add, And, Binom, Circ, Div, Log, Max, Min, Mod, Mul, Nand, Nor, 
-   Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
+local Add, And, Binom, Circ, Deal, Div, Log, Max, Min, Mod, Mul, Nand, 
+   Nor, Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
 -- one-of-a-kind monadic functions
-local Clone, Down, MatInv, Pass, Range, Ravel, Reverse, Reverse1, Shape, 
+local Clone, Down, MatInv, Pass, Ravel, Reverse, Reverse1, Shape, 
    Transpose, Up   
 -- one-of-a kind dyadic functions
-local Attach, Attach1, Compress, Compress1, Deal, Decode, Drop, Encode, 
+local Attach, Attach1, Compress, Compress1, Decode, Drop, Encode, 
    Expand, Expand1, Find, Format, Has, Get, MatDiv, Rerank, Reshape, 
    Rotate, Rotate1, Same, Take 
 -- monadic operators 
@@ -333,19 +409,20 @@ local Inner
 -- end of forward declarations
 
 local forward = [[
--- numeric monadic functions
+-- monadic primitive scalar functions
 -- these functions generalize term-by-term to any array
-local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Recip, Roll, Sign, Unm
--- numeric dyadic functions
--- these functions generalize term-by-term to arrays of the same shape or
+local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Range, Recip, Roll, 
+   Sign, Unm
+-- dyadic primitive scalar functions
+-- these functions generalize term-by-term to compatible arrays or
 --   when one operand is a singleton
-local Add, And, Binom, Circ, Div, Log, Max, Min, Mod, Mul, Nand, Nor, 
-   Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
+local Add, And, Binom, Circ, Deal, Div, Log, Max, Min, Mod, Mul, Nand, 
+   Nor, Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
 -- one-of-a-kind monadic functions
-local Clone, Down, MatInv, Pass, Range, Ravel, Reverse, Reverse1, Shape, 
+local Clone, Down, MatInv, Pass, Ravel, Reverse, Reverse1, Shape, 
    Transpose, Up   
 -- one-of-a kind dyadic functions
-local Attach, Attach1, Compress, Compress1, Deal, Decode, Drop, Encode, 
+local Attach, Attach1, Compress, Compress1, Decode, Drop, Encode, 
    Expand, Expand1, Find, Format, Has, Get, MatDiv, Rerank, Reshape, 
    Rotate, Rotate1, Same, Take 
 -- monadic operators 
@@ -358,6 +435,8 @@ local Inner
 -- Exceptional functions, i.e. not fitting into the classification
 
 local Set
+
+-------------  LuaAPL functions A-Z  -------------------------------
 
 -- Functions that have passed quality inspection for Lua⋆APL 0.3 --
 
@@ -388,7 +467,11 @@ Clone = function(_w)
    return res
 end
 
+Compress = along(compress,2)
+Compress1 = along(compress,1)
+
 Deal = function(_w,_a)
+print('Dealing ',_a,' items from ',_w);
    local n=_w
    argcheck(_a<=n,'pair',"can't deal ".._a.." from "..n)
    local p=iota(n)
@@ -405,6 +488,8 @@ Div = function(_w,_a) return _a/_w end
 Each = function(f) return function(_w) return each(f,_w) end end
 
 Exp = exp 
+Expand = along(expand,2)
+Expand1 = along(expand,1)
 
 Fact = function(_w) 
    argcheck(is_int(_w),1,"integer expected")
@@ -438,16 +523,18 @@ Get = function(_w,_a)
    if is_not"table"(_a) then return core_index(_w,_a) end
    local n=#_a
    local rows, cols = shape(_w) 
-   if not rows then 
+   if not cols then 
       local res=iota(n)
       for k=1,n do res[k]=_w[_a[k]] end
-      res.rows=_a.rows
-      res.cols=_a.cols
+      rawset(res,'rows',_a.rows)
+      rawset(res,'cols',_a.cols)
       return res
    end
-   -- indexing a matrix   
+   -- indexing a matrix
+   -- FIXME: result of e.g. A[{{2,3};{3,2}}] is a nested array, 
+   ---   not a matrix as it should be.   
    argcheck(n<=2,2,"expected two indices, got "..n)
-   local i,j,submat = _a[1], _a[2], true
+   local i,j,submat = rawget(_a,1), rawget(_a,2), true
    if is"number"(i) then i={i}; submat=false end
    if is"number"(j) then j={j}; submat=false end
    if i==nil then i=iota(rows) end
@@ -496,7 +583,14 @@ end
 Pass = function() return end
 Pi = function(_w) return math.pi*_w end
 Pow = function(_w,_a) return _a^_w end
-Range = iota
+
+Range = function(_w) 
+   local got=Format(_w,'raw')
+   _w=singleton(_w) 
+   argcheck(_w and is_int(_w),"⍵",
+"integer-valued singleton required, got "..got,"Range")
+   return iota(_w)
+end
 
 Ravel = function(_w) 
    if is_not"table"(_w) then return rho(_w,1) end
@@ -522,9 +616,7 @@ end
 Reshape = function (_w,_a)
    local res=stencil(_w,_a)
    argcheck(res, 1, "can't reshape nil")
-   local m = shape(res)
-   local n = shape(_w)
-   if not m or not n or #res<2 or #_w<2 then return res end  
+   if #res<2 or #_w<2 then return res end  
    return set(res,1,#res,unpack(_w))
 end
 
@@ -558,6 +650,8 @@ Rotate = function(_w,_a)
    if k==nil then _a = {0,_a}; k=2 end
    argcheck(k==2,'⍺',"number or two-element array required")   
    for k=1,2 do if _a[k]~=0 then
+-- FIXME: this point is not reached for e.g. Rotate(A,{2,3}) 
+print("Rotating along axis "..k.." by ".._a[k])
       _w=Rerank(Rotate(Rerank(_w,-k),_a[k]),k) 
    end end
    return _w
@@ -569,27 +663,18 @@ Rotate1 = function(_w,_a)
 end
 
 Same = function(_w,_a) return sanitize(_a==_w) end
-
-local scan = function(_a)
-   return function(_w)
-      if #_w==0 then 
-         argcheck(unit[_a],'f',"function with no left-unit",'scan')
-         return unit[_a] 
-      end
-      local res=like(_w)
-      res[1]=_w[1]
-      for k=2,#_w do res[k]=_a(_w[k],res[k-1]) end
-      return res
-   end
-end
-Scan = spread(scan,2)
-Scan1 = spread(scan,1)
+Scan=function(f) return along(scan(f),2) end
+Scan1=function(f) return along(scan(f),1) end
 
 Set = function(_w,_a,v)
    checktype(_w,'table',1)
+   local v_tbl=is"table"(v)
    if is"function"(_a) then
-      local j=0
-      for k in _a do j=j+1; _w[k]=v[j] end
+      if v_tbl then
+         local j=0
+         for k in _a do j=j+1; _w[k]=v[j] end
+      else for k in _a do _w[k]=v end
+      end
       return v
    end
    if is"string"(_a) then 
@@ -600,8 +685,10 @@ Set = function(_w,_a,v)
    end
    local n=#_a
    local rows, cols = shape(_w) 
-   if not rows then 
-      for k=1,n do _w[_a[k]]=v[k] end
+   if not cols then 
+      if v_tbl then for k=1,n do _w[_a[k]]=v[k] end
+      else for k=1,n do _w[_a[k]]=v end
+      end
       return v
    end
    -- indexing a matrix   
@@ -611,8 +698,11 @@ Set = function(_w,_a,v)
    if is"number"(j) then j={j}; submat=false end
    if i==nil then i=iota(rows) end
    if j==nil then j=iota(cols) end
-   local l,m,n = 0,#i,#j 
-   for k in indices(cols,i,j) do l=l+1; _w[k]=v[l] end
+   if v_tbl then
+      local l=0
+      for k in indices(cols,i,j) do l=l+1; _w[k]=v[l] end
+   else for k in indices(cols,i,j) do _w[k]=v end
+   end
    return v
 end
 
@@ -629,6 +719,7 @@ Take = function(_w,_a)
    if is_not"table"(_w) then _w=rho(_w,1,1) end
    local m,n = shape(res)
    local p,q = shape(_w)
+print("Take:  _w,p,q=",_w,p,q)
    local a,b = _a
    if is"table"(_a) then a,b = unpack(_a) end
    argcheck(q or not b,1,"can't take a matrix from a vector")
@@ -638,6 +729,30 @@ Take = function(_w,_a)
    n,j,l = adjustindex(q,b)
    res[{iota(m,k),iota(n,l)}] = _w[{iota(m,i),iota(n,j)}]; return res
 end
+
+local drop = function(_w,_a)   
+   local m,n=#_w,abs(_a)
+   if n>=m then return rho(0,0) end
+   m=m-n
+   local res=rho(0,m)
+   local i=iota(m)
+   if _a<0 then res[i]=_w[i] else res[i]=_w[iota(m,n+1)] 
+   end
+   return res
+end
+Drop = function(_w,_a)
+   checktype(_w,'table','⍵','Drop')
+   arr(_w)
+   local m,n = shape(_w)
+   local s=singleton(_a)
+   if s and not n then return drop(_w,s) end
+   argcheck(not s and not n,'⍺',"can't drop a matrix from a vector")
+   argcheck(s and n,'⍺',"can't drop a vector from a matrix")
+   argcheck(#_a==2,'⍺',"can't drop an array of rank "..#_a)
+   return along(drop,2)(along(drop,1)(_w,_a[1]),2)
+end
+   
+
 
 TestEq = function(_w,_a) return _a==_w and 1 or 0 end; 
 TestGE = function(_w,_a) return _a>=_w and 1 or 0 end
@@ -698,20 +813,6 @@ Attach1 = function(_w,_a)
    return res
 end   
 
-Compress = function(_w,_a)
-   local res=arr{}
-   if is_int(_a) then if _a>0 then
-      checktype(_w,'table','_w','Compress')
-      for k,v in ipairs(_w) do set(res,#res+1,#res+_a,v) end
-      return res
-   end end
-   checksize(_a,_w,1,'Compress') 
-   for k,v in ipairs(_w) do if _a[k]>0 then set(res,#res+1,#res+_a[k],v) end 
-   end
-   return res
-end
-Compress1 = function(_w,_a) return Transpose(Compress(Transpose(_w),_a)) end
-
 Decode = function(_w,_a)
    local res,d=arr{}   
    checktype(_w,'number','_w')
@@ -724,14 +825,14 @@ Decode = function(_w,_a)
    return res
 end
 
-Drop = function(_w,_a) 
+--[[Drop = function(_w,_a) 
    local n,res = #_w, arr{}
    if abs(_a)>=n then return res end
    if _a<0 then set(res,1,n+_a,get(_w,1,n+_a))
    else set(res,1,n-_a,get(_w,_a+1,n))
    end
    return res
-end
+end--]]
 
 --[[
       if _a then checksize(_a,_w,1,'Each') else _a={} end
@@ -750,16 +851,6 @@ Encode = function(_w,_a)
    return res
    end
 
-Expand = function(_w,_a)
-   local res=arr{}
-   for k,v in ipairs(_w) do 
-      res[#res+1]=v
-      if _a[k]>0 then set(res,#res+1,#res+_a[k],0) end
-   end
-   return res
-end
-Expand1 = function(_w,_a) return Transpose(Expand(Transpose(_w),_a)) end
-   
 -- Format is defined after the A-Z group
 
 Up = function(_w) 
@@ -813,7 +904,7 @@ local function rawformat(_w)
       else return tostring(_w) 
    end end
    if is"table"(_w) then 
-      local cols = _w.cols
+      local cols = rawget(_w,'cols')
       local data = {}
       local n = #_w
       local L,R
@@ -822,7 +913,7 @@ local function rawformat(_w)
       else L,R = '{','}'
       end
       for k=1,n do 
-         data[#data+1]=rawformat(_w[k])
+         data[#data+1]=rawformat(rawget(_w,k))
          if k<n then if cols and k%cols==0 then data[#data+1]=';'
          else data[#data+1]=','
          end end 
@@ -842,12 +933,12 @@ function Format(_w,_a, level)
       else return form(_w,_a) 
    end end
    if is"table"(_w) then 
-      local cols = _w.cols
+      local cols = rawget(_w,'cols')
       local data = {}
       local n = #_w
       local l = 0
       for k=1,n do 
-         local item=Format(_w[k],_a,level+1)
+         local item=Format(rawget(_w,k),_a,level+1)
          l=max(l,#item)
          data[#data+1]=item 
          if k<n then if cols and k%cols==0 then data[#data+1]='\n'
@@ -867,7 +958,7 @@ end -- Format
 -- Local values (whose names are only visible during compilation) are
 --   assigned to permanent names.
 
-local num1, num2, gen1, gen2, op1, op2
+local scalar1, scalar2, gen1, gen2, op1, op2
 
 -- If you ever make changes to the forward declaration near the top of 
 -- this file, I have provided a tool to automate regeneration of the 
@@ -878,24 +969,22 @@ local num1, num2, gen1, gen2, op1, op2
 -- and cut-and-paste its output below, replacing previous version. 
 -- If you like, ask your text editor to reformat the paragraphs.
 
-num1={Abs=Abs, Ceil=Ceil, Exp=Exp, Fact=Fact, Floor=Floor, Ln=Ln,
-  Unm=Unm, Not=Not, Pi=Pi, Recip=Recip, Roll=Roll, Sign=Sign}
+scalar1={Abs=Abs, Ceil=Ceil, Exp=Exp, Fact=Fact, Floor=Floor, Ln=Ln,
+  Unm=Unm, Not=Not, Pi=Pi, Range=Range, Recip=Recip, Roll=Roll, Sign=Sign}
 
-num2={Add=Add, And=And, Binom=Binom, Circ=Circ, Div=Div, Log=Log,
-  Max=Max, Min=Min, Mod=Mod, Mul=Mul, Nand=Nand, Nor=Nor, Or=Or, Pow=Pow,
-  Sub=Sub, TestEq=TestEq, TestGE=TestGE, TestGT=TestGT, TestLE=TestLE,
-  TestLT=TestLT, TestNE=TestNE}
+scalar2={Add=Add, And=And, Binom=Binom, Circ=Circ, Deal=Deal, Div=Div,
+  Log=Log, Max=Max, Min=Min, Mod=Mod, Mul=Mul, Nand=Nand, Nor=Nor,
+  Or=Or, Pow=Pow, Sub=Sub, TestEq=TestEq, TestGE=TestGE, TestGT=TestGT,
+  TestLE=TestLE, TestLT=TestLT, TestNE=TestNE}
 
-gen1={Clone=Clone, Down=Down, MatInv=MatInv, Pass=Pass, Range=Range,
-  Ravel=Ravel, Reverse=Reverse, Reverse1=Reverse1, Shape=Shape,
-  Transpose=Transpose, Up=Up}
+gen1={Clone=Clone, Down=Down, MatInv=MatInv, Pass=Pass, Ravel=Ravel, 
+  Reverse=Reverse, Reverse1=Reverse1, Shape=Shape, Transpose=Transpose, Up=Up}
 
-gen2={Attach=Attach, Attach1=Attach1, Compress=Compress,
-  Compress1=Compress1, Deal=Deal, Decode=Decode, Drop=Drop,
-  Encode=Encode, Expand=Expand, Expand1=Expand1, Find=Find,
-  Format=Format, Has=Has, Get=Get, MatDiv=MatDiv, Rerank=Rerank,
-  Reshape=Reshape, Rotate=Rotate, Rotate1=Rotate1, Same=Same, Set=Set, 
-  Take=Take }
+gen2={Attach=Attach, Attach1=Attach1, Compress=Compress, 
+  Compress1=Compress1, Decode=Decode, Drop=Drop, Encode=Encode,
+  Expand=Expand, Expand1=Expand1, Find=Find, Format=Format,
+  Has=Has, Get=Get, MatDiv=MatDiv, Rerank=Rerank, Reshape=Reshape,
+  Rotate=Rotate, Rotate1=Rotate1, Same=Same, Set=Set, Take=Take }
 
 op1={Both=Both, Each=Each, Outer=Outer, Reduce=Reduce, Reduce1=Reduce1, 
   Scan=Scan, Scan1=Scan1}
@@ -903,22 +992,23 @@ op1={Both=Both, Each=Each, Outer=Outer, Reduce=Reduce, Reduce1=Reduce1,
 op2={Inner=Inner}
 
 local groups={gen1=gen1, gen2=gen2, op1=op1, op2=op2}
-apl._F = { num1=num1, num2=num2, gen1=gen1, gen2=gen2, op1=op1, op2=op2} 
+apl._F = { scalar1=scalar1, scalar2=scalar2, gen1=gen1, gen2=gen2, 
+  op1=op1, op2=op2} 
 
--- Replace numeric scalar functions by their expansions
-
-for k,v in pairs(num1) do
-   apl[k] = function(_w,_a) return each(v,_w) end
-end
-
-for k,v in pairs(num2) do 
-   apl[k] = function(_w,_a) return both(v,_w,_a,1,1) end
-end
-
--- Copy over other functions
+-- Copy over nonscalar functions
 
 for _,group in pairs(groups) do
    for name,value in pairs(group) do apl[name] = value end
+end
+
+-- Replace scalar functions by their expansions
+
+for k,v in pairs(scalar1) do
+   apl[k] = function(_w,_a) return each(v,_w) end
+end
+
+for k,v in pairs(scalar2) do 
+   apl[k] = function(_w,_a) return both(v,_w,_a,1,1) end
 end
 
 -- Populate array metatable
@@ -1108,18 +1198,11 @@ help("start",[[
 
 -- Insert last-minute items into module table
 
-setmetatable(apl,{
-__call = 
-   function(apl,env)
-      env = env or _ENV
-      env.help = apl.help
-   end})
-
 apl.NaN = NaN
 apl.help = help
 apl.import = function(apl,names,env)
 --- apl:import(names)  e.g. apl:import"Rotate,Reverse,Range,Shape"
---    imports selected names from `apl` into global namespace
+--    imports specified names from `apl` into global namespace
 --  apl:import"*"  imports all names not starting with underscore
 --  import(source,names,target) in general does this from table `source`
 --    to table `target`
@@ -1137,7 +1220,9 @@ apl.import = function(apl,names,env)
    end end 
    elseif is"string"(names) then for k in names:gmatch"%a%w+" do
       env[k]=apl[k]
-   end end
+   end 
+   else env.help = apl.help   
+   end
 end
 
 apl.util = {argcheck=argcheck, checktype=checktype, logfile=logfile,
@@ -1155,7 +1240,7 @@ logfile:write [[
 ]]   
 
 print [[
-Lua⋆APL 0.2 © Dirk Laurie 2013.  
+apl-lib 0.3.0 © Dirk Laurie 2013
 Bug reports are welcome. You'll find me on Lua-L.
 Try `apl.help()` if you don't want to read even the README.
 --]]

@@ -346,7 +346,7 @@ static void core_new(lua_State *L, int len, int init) {
   int i, tbl=lua_gettop(L)+1;
   lua_createtable(L,len,3);
   lua_pushinteger(L,len);
-  lua_setfield(L,tbl,"apl_len");           
+  lua_setfield(L,tbl,"apl_len");
   if (!init || lua_isnoneornil(L,init)) 
     for (i=1; i<=len; i++) { lua_pushinteger(L,i); lua_rawseti(L,tbl,i); }
   else 
@@ -430,6 +430,8 @@ static int apl_rho(lua_State *L) {
 /* iota(n) */
 static int apl_iota(lua_State *L) {
   int i=0, j, len=luaL_checkint(L,1);
+  double x=lua_tonumber(L,1);
+  if (len>x) printf("Lua 'truncated' %.10g to %d\n",x,len);
   luaL_argcheck(L,len>=0,1,"must be a non-negative integer");
   if (!lua_isnoneornil(L,2)) { i=luaL_checkint(L,2)-1; }
   lua_settop(L,0);
@@ -592,7 +594,13 @@ static int apl_both(lua_State *L) {
 #undef x1
 #undef x2
   
+static int tointeger(lua_State *L) {
+   lua_pushinteger(L,lua_tointeger(L,-1));
+   return 1;
+}
+
 static const luaL_Reg funcs[] = {
+  {"tointeger", tointeger},
   {"get", block_get},
   {"set", block_set},
   {"move", block_move},

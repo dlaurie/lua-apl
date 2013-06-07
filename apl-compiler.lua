@@ -82,10 +82,12 @@ local Param = _s^0*(P'⍺'/'_a' + P'⍵'/'_w')*_s^0 -- not to be looked up in _V
 local Var = _s^0*C(first*later^0+utf-funcname-operator)*_s^0 - Param
 local aplstr = _s^0*"'"*(1-P"'")^0*"'"*_s^0 -- non-empty
 
-local apl_expr = P{ "expr";
-   expr = 
-     Param/1*'←'*V"expr"/"set%1(%2)" +
-     Var*'←'*V"expr"/"Assign(%2,'%1')" + 
+local apl_expr = P{ "statement";
+   statement = (_s^0*P'←'*V"expr")/"return %1" + 
+       Param/1*'←'*V"expr"/"%1=%2" +
+       Param/1*"["*V"indices"*"]"*'←'*V"expr"/"%1[%2]=%3" +
+       V"expr"/1;
+   expr = Var*'←'*V"expr"/"Assign(%2,'%1')" +
      Var*"["*V"indices"*"]"*'←'*V"expr"/"Assign(%3,'%1',%2)" +
      V'leftarg'*V'dyadic_func'*V'expr'/"%2(%3,%1)" +
      V'monadic_func'*V'expr'/"%1(%2)" +
@@ -161,18 +163,15 @@ local register = function (class, fct, APLname, LuaName, alias, helptext)
    if helptext then help(fct,helptext) end
 end
 
-local preamble=[[
-local _w,_a=... 
-local function seta(v) _a=v return v end 
-local function setw(v) _w=v return v end 
+local preamble=[[local _w,_a=... 
 ]]
 
 local load_apl = function(_w)
    checktype(_w,'string',1)
    if _w:match"^@" then return APL_ENV[_w:sub(2)] end
-   _w = _w:gsub("⍝[^\n]*","\n")  -- strip off APL comments
+   _w = _w:gsub("⍝[^\n]*\n"," ")  -- strip off APL comments
    local lua = apl2lua(_w)
-   if select(2,_w:gsub('⋄',''))==0 then
+   if select(2,_w:gsub('⋄',''))==0 then  
       lua="return "..lua 
       end
    local f,msg = load(preamble..lua,nil,nil,APL_ENV)
@@ -197,17 +196,17 @@ end
 ---- Definition of the Lua⋆APL function-to-symbol mapping interface ----
 
 local f1 = {Abs='∣', Ceil='⌈', Exp='⋆', Fact='!', Floor='⌊', Format='⍕',
-  Ln='⍟', Neg='−', Not='∼', Pi='○', Recip='÷', Roll='?', Sign='×', 
+  Ln='⍟', Unm='−', Not='∼', Pi='○', Recip='÷', Roll='?', Sign='×', 
   Clone='+', Down='⍒', --[[MatInv='⌹',]] Pass='∘', Range='⍳', Ravel=',', 
-  Reverse='⌽', Reverse1='⊖', Shape='⍴', Squish='⌷', Transpose='⍉', Up='⍋'}
+  Reverse='⌽', Reverse1='⊖', Shape='⍴', Transpose='⍉', Up='⍋'}
 
 local f2={Add='+', And='∧', Binom='!', Circ='○', Div='÷', Log='⍟', Max='⌈', 
   Min='⌊', Mod='∣', Mul='×', Nand='⍲', Nor='⍱', Or='∨', Pow='⋆', Sub='−', 
   TestEq='=', TestGE='≥', TestGT='>', TestLE='≤', TestLT='<', TestNE='≠', 
   Attach=',', Attach1='⍪', Compress='/', Compress1='⌿', Deal='?', 
   Decode='⊥', Drop='↓', Encode='⊤', Expand='\\', Expand1='⍀', Find='⍳', 
-  Format='⍕', Has='∊', --[[MatDiv='⌹',]] Pass='∘', Reshape='⍴', Rotate='⌽',
-  Rotate1='⊖', Same='≡', Take='↑', Unsquish='⌻'}
+  Format='⍕', Has='∊', --[[MatDiv='⌹',]] Pass='∘', Rerank='⎕', 
+  Reshape='⍴', Rotate='⌽', Rotate1='⊖', Same='≡', Take='↑'}
 
 local op1={Reduce='/', Reduce1='⌿', Scan='\\', Scan1='⍀'}
 
@@ -253,6 +252,16 @@ end
 apl.lua = lua_code
 apl.register = register
 
+local import = apl.import
+apl.import = function(apl,...)
+   if ... then import(apl,...)
+   else
+      _ENV.help = apl.help
+      _ENV.lua = apl.lua
+   end
+end
+
+
 register(1,load_apl,'∇','Define',nil,
   "Define: ∇s returns APL code 's' compiled as a Lua function")
 register(1,function(_w) return load_apl(_w)() end,'⍎','Execute',nil,
@@ -261,14 +270,7 @@ register(1,function(_w) return load_apl(_w)() end,'⍎','Execute',nil,
 
 -- clean up
 
-getmetatable(apl).__call =
-   function(apl,env)
-      env = env or _ENV
-      env.help = apl.help
-      env.lua = apl.lua
-      env.Define = apl.Define
-      env.Execute = apl.Execute
-   end
+setmetatable(apl,{__call = function(apl,code) return load_apl(code) end })
 
 setmetatable(_ENV,meta_ENV)
 loading=false

@@ -272,7 +272,7 @@ static int guess_apl(char* b) {
 /* Possible characters at the start of an executable Lua statement */
   char *Lua="ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijklmnpqrstuvwxyz(";
 /* Words that could be present when an APL string literal is used in Lua */
-  char *c, *Lua_Marker[] = {"apl","Define","Execute","return","print"};
+  char *c, *Lua_Marker[] = {"apl","Define","Execute","help","return","print"};
 /* Skip blanks */
   while (*b==' ') b++;
   if (strlen(b)<2) return 0; 

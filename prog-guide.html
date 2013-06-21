@@ -14,10 +14,6 @@
 <p>APL syntax depends on knowing whether a name refers to a function, a monadic operator, a dyadic operator or a value. For the built-in functions, including functions assigne to APL names, this information is predefined, but for user-defined functions, the function or operator must be registered. The name will then shadow an object of the same name in the APL global namespace.</p>
 <p>An unregistered name in an APL expression is always assumed to refer to a value.</p>
 <p>You register a function as follows:</p>
-<pre><code>   apl.add_function(&#39;%&#39;,{∇&quot;⍵÷100&quot;,∇&quot;⍺×⍵÷100&quot;,lua=&#39;percent&#39;,
-     alias=&#39;p&#39;,expand=3,help=[[
-1. Percent: %⍵ → ⍵/100
-2. PercentOf: ⍺%⍵ → ⍺×⍵/100]]})</code></pre>
 <p>which can then be used as</p>
 <pre><code>   return ⍎&quot;5 10 20%400&quot;
 20 40 80</code></pre>
@@ -25,6 +21,71 @@
 <pre><code>   return ⍎&quot;5 10 20p 400 600 800&quot;
 20 60 160</code></pre>
 <p>Note the space after <code>p</code>, otherwise <code>p400</code> would be parsed as a name. <code>help(apl.add_function)</code> tells more, including how to register an operator.</p>
+<h3 id="rank">Rank</h3>
+<p>Almost all the functions in the module table act on scalars, vectors or matrices. Lua⋆APL contains a toolbox that allows one to define a function as a primitive scalar function and transform it to one that acts on arguments of higher rank.</p>
+<p>A primitive scalar function is one that takes scalar arguments and returns a scalar value. In order to emphasize that these functions accept only scalar arguments, we use a different notation and terminology: unary functions take one argument called <code>x</code>, binary functions take two arguments called <code>x1</code> and <code>x2</code>. These functions are provided in the table <code>apl.scalar</code> and have lowercase names. Many of them come directly from the Lua <code>math</code> library.</p>
+<p>Although most of these functions operate on numbers, <code>scalar</code> here means simply that the function treats each of its arguments as an entity, even if it actually is a table.</p>
+<h4 id="rank-modifiers">Rank modifiers</h4>
+<dl>
+<dt><code>toolbox.first(x)</code></dt>
+<dd><p>Returns the first two elements of <code>x</code>.</p>
+</dd>
+<dt><code>toolbox.uprank(x)</code></dt>
+<dd><p>Replaces the <code>index</code> and <code>newindex</code> metamethods of <code>x</code> so that</p>
+</dd>
+</dl>
+<p>Finally, the table <code>apl.scalar</code> contains some functions that repackage the contents of a table.</p>
+<p>Lua⋆APL operators</p>
+<p>In library mode, greater generality can be achieved than when working from inside APL itself, for two reasons:</p>
+<ol style="list-style-type: decimal">
+<li>Lua functions are first-class values.</li>
+<li>The number of arguments to a function can be more than 2.</li>
+</ol>
+<p>The basic building-block of APL is</p>
+<p>Also in the table <code>apl.scalar</code> are functions that take a Lua function, one or two possibly array-valued arguments, and perhaps some control parameters, and apply the function in a specified way to the arguments to produce a single result, which may of rank 0, 1 or 2. These functions are the engines powering the Lua⋆APL operators of the module library.</p>
+<p>Although in most cases these functions will be used to create APL functions from primitive scalar functions, there is nothing in their design that forces array elements to be actual scalars. They operate on nested arrays as smoothly as on arrays of scalars.</p>
+<p>&quot;Singleton&quot; means a scalar or an array of length 1, and a vector is considered to have &quot;the same shape&quot; as a one-row or one-column matrix of the same length. The result is a matrix is either operand is a matrix.</p>
+<dl>
+<dt><code>each(f,x)</code></dt>
+<dd><p>Applies unary <code>f</code> term-by-term to every element of <code>x</code>, producing a result of the same shape as <code>x</code>.</p>
+</dd>
+<dt><code>both(f,x1,x2,e1,e2)</code></dt>
+<dd><p>Applies binary <code>f</code> term-by-term to every pair of corresponding elements of <code>x1</code> and <code>x2</code>, whose sizes must be compatible as specified by <code>e1</code> and <code>e2</code>.</p>
+<dl>
+<dt><code>e1=0; e2=0</code></dt>
+<dd><code>x1</code> and <code>x2</code> must have the same shape, which is also the shape of the result.
+</dd>
+<dt><code>e1=1</code></dt>
+<dd><code>x1</code> may be a singleton, treated as equivalent to a constant array of the same shape as <code>x2</code>.
+</dd>
+<dt><code>e2=1</code></dt>
+<dd><code>x2</code> may be a singleton, treared as equivalent to a constant array of the same shape as <code>x1</code>.
+</dd>
+<dt><code>e1=2</code></dt>
+<dd><code>x1</code> is treated as a constant first argument even if it is an array.
+</dd>
+<dt><code>e2=2</code></dt>
+<dd><code>x2</code> is treated as a constant second argument even if it is an array.
+</dd>
+</dl>
+</dd>
+<dt><code>outer(f,x1,x2)</code></dt>
+<dd><p>Both arguments are coerced to vectors. <code>f</code> is applied to every possible combination of elements from <code>x1</code> and <code>x2</code>, producing a matrix <code>z</code> with <code>z[i;j]=f(x1[i],x2[j])</code>.</p>
+</dd>
+<dt><code>inner(f,x1,x2)</code></dt>
+<dd><p>Both arguments must be matrices, The result is equivalent to <code>outer(f,Rerank(x1,1),Rerank(x2,2),0,0)</code>.</p>
+</dd>
+<dt><code>dot(f,g,x1,x2)</code></dt>
+<dd><p>Equivalent to <code>reduce(f,both(g,x1,x2,1,1))</code>.</p>
+</dd>
+</dl>
+<p><code>scan(f,x)</code> Applies binary <code>f</code> cumulatively to <code>x</code>. The result satisfies <code>z[1]=x[1]</code>, <code>z[i+1]=f(z[i],x[i+1]</code>.</p>
+<dl>
+<dt><code>reduce(f,x)</code></dt>
+<dd>The last element of <code>scan(f,x)</code>.
+</dd>
+</dl>
+<p>The module table contains wrappers for these functions, but the exact method of wrapping may differ from one function to the next.</p>
 <hr />
 <h2 id="the-single-purpose-apl-routines">The single-purpose APL routines</h2>
 <p>The basic routines defining Lua⋆APL are delivered in the subtables of <code>apl._F</code>. The routine names are mostly commonly used in APL documentation, such as <code>Ravel</code>.</p>
@@ -70,9 +131,13 @@ function: 0x815d7e0 function: 0x8168248</code></pre>
 <p>Merges <code>tbl[low:middle]</code> with <code>tbl[middle+1:high'</code> according to <code>cmp</code> (specified as for the standard <code>table.sort</code>). Both halves are assumed to be already sorted.</p>
 <h2 id="apl-functions">APL functions</h2>
 <p>These functions operate on or return tables that conform to the specifications for APL arrays. See main documentation.</p>
-<h3 id="compatabop"><code>compat(a,b,op)</code></h3>
-<p>Tests whether <code>a</code> and <code>b</code> are compatible for dyadic operations. They are not compatible if both are arrays and either are vectors of unequal length, or incompatible shapes for the specified operation. Returns <code>true</code> if compatible, <code>false,m,n</code> otherwise, where <code>m</code> and <code>n</code> are lengths that cause incompatibility.</p>
-<p>For term-by-term operations (<code>op=1</code>), a one-row and a one-column matrix are not compatible with each other, but either is compatible with a vector of the same length. For matrix multiplication, row or column scaling, etc., a vector <code>a</code> or <code>b</code> is compatible if a one-row or one-column matrix (respectively) would be.</p>
+<h3 id="compatab"><code>compat(a,b)</code></h3>
+<p>Tests whether <code>a</code> and <code>b</code> are compatible for term-by-term dyadic functions. That means one of the following conditions holds:</p>
+<ol style="list-style-type: decimal">
+<li><code>a</code> or <code>b</code> is a scalar or a one-element array.</li>
+<li><code>a</code> and <code>b</code> have the same shape.</li>
+<li><code>a</code> or <code>b</code> is a vector, and the other is a one-row or a one-column matrix of the same length.</li>
+</ol>
 <h3 id="expandfa1a2x1x2"><code>expand(f,a1,a2,x1,x2)</code></h3>
 <p>Applies the dyadic function <code>f</code> term-by-term to the elements of <code>a1</code> and <code>a2</code>. Singleton arguments in either position are considerd to be compatible as specified by the boolean values <code>x1</code> and <code>x2</code>. The shape of the result is taken from <code>a1</code> by preference; if <code>a1</code> has no shape, it is taken from <code>a2</code>.</p>
 <h3 id="iotanstart1"><code>iota(n[,start=1])</code></h3>

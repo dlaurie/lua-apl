@@ -449,13 +449,13 @@ static int apl_iota(lua_State *L) {
 }
 
 /* check compatibility of shapes */
-static int check_compat(lua_State *L, int a1, int a2, int op, int *m, int *n) {
+static int check_compat(lua_State *L, int a1, int a2, int *m, int *n) {
   int l1=-1,m1=-2,n1=-3, l2=-4,m2=-5,n2=-6,k=1,l=1;
   if (!lua_istable(L,a1) || !lua_istable(L,a2)) return 1;    /* scalar */    
   apl_getshapeinfo(a1,l1,m1,n1);
   apl_getshapeinfo(a2,l2,m2,n2);
   if (l1>=0 && l2>=0) { k=l1; l=l2; }  /* two vectors */
-  else if(op==1) {
+  else {
     if (l1<0 && l2<0) { /* two matrices */
        k=m1; l=m2;
        if (k==l) { k=n1; l=n2; }
@@ -466,36 +466,24 @@ static int check_compat(lua_State *L, int a1, int a2, int op, int *m, int *n) {
     else if (l1>=0&&m2==1) { k=n2; l=l1; }    /* vector and one-row matrix */
     else { k=l1; l=l2; }                  /* vector and incompatible matrix */ 
   }
-  if(op==2) {
-    if (l2>=0) { k=n1; l=l2; }       /* matrix and vector */
-    else if (l1>=0) { k=l1; l=m2; }  /* vector and matrix */
-    else { k=n1; l=m2; }                 /* two matrices */
-  }   
   if (k==l) return 1;
   if (m&&n) { *m=k; *n=l; }
   return 0;
 }
 
-/* compat(a1,a2,op)
-   For op=1, returns true if
+/* compat(a1,a2)
+   Returns true if
    - either a1 or a2 is scalar
    - a1 and a2 are both vectors of the same length
    - a1 and a2 have identical shapes
    - either a1 or a2 is a vector and the other a one-row or one-column
      matrix of the same length
-   For op=2, returns true if
-   - either a1 or a2 is scalar
-   - a1 and a2 are both vectors of the same length
-   - a1 is a vector as long as the columns of a2
-   - a2 is a vector as long as the rows of a1
-   - a1 has as many columns as a2 has rows
   Returns false,m,n otherwise, where m and n are the two numbers that
     break compatibility 
  */
 static int apl_compat(lua_State *L) {
-  int m,n,op=luaL_checkint(L,3),res;
-  luaL_argcheck(L,op==1||op==2,3,"must be 1 or 2");  
-  res = check_compat(L,1,2,op,&m,&n);
+  int m,n,res;
+  res = check_compat(L,1,2,&m,&n);
   lua_pushboolean(L,res);
   if (res) return 1;
   lua_pushinteger(L,m); lua_pushinteger(L,n);
@@ -539,32 +527,34 @@ static int apl_each(lua_State *L) {
  * Otherwise applies f termwise, and stores the results in a fresh table,
    which is returned after copying the shape from a1, or if a1 is not 
    a table, from a2.
- * If x1 and x2 both test `false`, the lengths of a1 and a2 must match.
- * If either tests `true`, the corresponding argument is allowed to be 
+ * If x1 and x2 both equal 0, the shapes of a1 and a2 must be compatible.
+ * If either equals 1, the corresponding argument is allowed to be 
    a scalar, or consist of a single value, which will be used every time.
+ * If either equals 2, the corresponding argument is used every time even
+   if it is a table.
  */
 static int apl_both(lua_State *L) {
-  int both1=lua_toboolean(L,x1), both2=lua_toboolean(L,x2), 
+  int both1=lua_tointeger(L,x1), both2=lua_tointeger(L,x2), 
     i, n, n1=1, n2=1, s=0, tbl1=lua_istable(L,a1), tbl2=lua_istable(L,a2); 
   luaL_checktype(L,f,LUA_TFUNCTION);
   luaL_argcheck(L,!lua_isnoneornil(L,a1),a1,"nil not allowed");
   luaL_argcheck(L,!lua_isnoneornil(L,a2),a2,"nil not allowed");
   lua_settop(L,r-1);
-  if (!tbl1 && !tbl2) {  /* both scalar */
+  if ((!tbl1 && !tbl2) || (both1==2 && both2==2)) {  /* both scalar */
     lua_call(L,2,1);
     return 1;
   }  
-  if (tbl1) n1=luaL_len(L,a1); 
-  if (tbl2) n2=luaL_len(L,a2);
+  if (tbl1 && both1!=2) n1=luaL_len(L,a1); 
+  if (tbl2 && both2!=2) n2=luaL_len(L,a2);
   n = n1>n2?n1:n2;
   core_new(L,n,0);
   if (!(n1&&n2)) return 1;  /* nothing to do */
-  if (n1!=1) both1=0;
-  if (n2!=1) both2=0;
-  if (tbl1 && both2) { s=a2; tbl2=0; }
-  else if (tbl2 && both1) { s=a1; tbl1=0; }
-  else { 
-   luaL_argcheck(L,check_compat(L,a1,a2,1,NULL,NULL),a2,
+  if (n1!=1 && both1==1) both1=0;
+  if (n2!=1 && both2==1) both2=0;
+  if (tbl1 && both2==1) { s=a2; tbl2=0; }
+  else if (tbl2 && both1==1) { s=a1; tbl1=0; }
+  else if (both1!=2 && both2!=2) { 
+   luaL_argcheck(L,check_compat(L,a1,a2,NULL,NULL),a2,
       "shapes are incompatible");
   } 
   if (s && lua_istable(L,s)) { /* replace singleton table by its one item */
@@ -572,11 +562,11 @@ static int apl_both(lua_State *L) {
   }
   for (i=1; i<=n; i++) {
     lua_pushvalue(L,f);
-    if (tbl1) lua_rawgeti(L,a1,i); else lua_pushvalue(L,a1);
+    if (tbl1 && both1!=2) lua_rawgeti(L,a1,i); else lua_pushvalue(L,a1);
     if (lua_isnoneornil(L,-1)) { 
       lua_rawseti(L,r,i); lua_settop(L,r); continue; 
     }    
-    if (tbl2) lua_rawgeti(L,a2,i); else lua_pushvalue(L,a2);
+    if (tbl2 && both2!=2) lua_rawgeti(L,a2,i); else lua_pushvalue(L,a2);
     if (lua_isnoneornil(L,-1)) { 
       lua_rawseti(L,r,i); lua_settop(L,r); continue; 
     } 
@@ -594,6 +584,58 @@ static int apl_both(lua_State *L) {
 #undef x1
 #undef x2
   
+void apl_array(lua_State *L,double *s,int l) {
+  int i, t;
+  core_new(L,l,0);
+  t=lua_gettop(L);
+  for (i=0; i<l; i++) { lua_pushnumber(L,s[i]); lua_rawseti(L,t,i+1); }
+}
+
+void dgesvd_(char *jobu, char *jobvt, int *m, int *n, double *a, int* lda,
+  double *s,  double *u, int *ldu,  double *vt, int *ldvt, 
+  double *work, int *lwork, int *info);
+
+/* svd(a) returns u,s,v; u and v as nested arrays */
+static int apl_svd(lua_State *L) {
+  int i,j,k,l,m,n,info,lw;
+  double *a, *u, *s, *vt, w0;
+  luaL_argcheck(L,lua_gettop(L)<2,2,"too many arguments");
+  luaL_checktype(L,1,LUA_TTABLE);
+  apl_getshapeinfo(1,l,m,n);
+  luaL_argcheck(L, m>0 && n>0, 1, "nonempty APL matrix required");
+  l = m<n? m :n;
+  a = (double *)(malloc(m*n*sizeof(double)));
+  u = (double *)(malloc(n*l*sizeof(double)));
+  s = (double *)(malloc(l*sizeof(double)));
+  vt = (double *)(malloc(l*m*sizeof(double)));
+  for (i=1; i<=m*n; i++) {
+    lua_rawgeti(L,1,i); a[i-1]=lua_tonumber(L,-1); lua_pop(L,1);
+  }
+  lw=-1;
+  dgesvd_("S","S",&n,&m,a,&n,s,u,&n,vt,&l,&w0,&lw,&info);
+  if (info==0) lw=(int)w0;
+  if (info==0) {
+    double *w=(double *)malloc(lw*sizeof(double));
+    dgesvd_("S","S",&n,&m,a,&n,s,u,&n,vt,&l,w,&lw,&info);
+    free(w);
+    if (info!=0) { lua_pushinteger(L,info); return 1; }
+  }
+  else { luaL_error(L,"error on first call to dgesvd, info=%d\n",info); }
+  apl_array(L,u,l*n); 
+  apl_array(L,s,l);
+  apl_array(L,vt,l*m);
+  free(vt); free(s); free(u); free(a);
+  return 3;
+}
+
+static int arr_index(lua_State *L) {
+   int i=luaL_checkint(L,2);
+   double *x=(double *)(lua_touserdata(L,1));
+   lua_pushnumber(L,*(x+i-1));
+   return 1;
+}
+
+/* not actually needed right now, but it might be */
 static int tointeger(lua_State *L) {
    lua_pushinteger(L,lua_tointeger(L,-1));
    return 1;
@@ -616,6 +658,7 @@ static const luaL_Reg funcs[] = {
   {"iota", apl_iota},
   {"both", apl_both},
   {"each", apl_each},
+  {"svd", apl_svd},
   {"compat", apl_compat},
   {"circ0", math_circ0},
   {"circ4", math_circ4},
@@ -633,10 +676,16 @@ static const luaL_Reg apl_meta[] = {
   {NULL, NULL}
 };
  
+static const luaL_Reg arr_meta[] = {
+  {"__index", arr_index},
+  {NULL, NULL}
+};
 
 LUAMOD_API int luaopen_apl_core (lua_State *L) {
   luaL_newlib(L, apl_meta);
   lua_setfield(L,LUA_REGISTRYINDEX,"apl_meta");
+  luaL_newlib(L, arr_meta);
+  lua_setfield(L,LUA_REGISTRYINDEX,"arr_meta");
   luaL_newlib(L, funcs);
   return 1;
 }

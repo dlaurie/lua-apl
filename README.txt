@@ -15,7 +15,9 @@ but operating on Lua numbers, strings, tables and functions.
 Package contents
 ----------------
 
-    apl.lua          -- Returns the module table
+    apl-lib.lua      -- Returns the module table for library mode
+    apl-compiler.lua -- Returns the module table for Lua mode
+    funclists.lua    -- A utility useful only when modifying Lua⋆APL itself.
     help.lua         -- Returns the required module 'help'
     test.lua         -- Tests a large selection of features
     finnaplidiom.lua -- A Lua module containing the FinnAPL idiom library,
@@ -24,9 +26,8 @@ Package contents
     lua-apl.xmodmap  -- APL key mappings for X
     README.md        -- What you are reading now
     lua-apl.html     -- User's manual
+    prog-guide.html  -- Programmer's guide (i.e. for this software itself)
     apl.c            -- Supporting routines in C 
-    lctype-utf8.c    -- Replacement for lctype.c providing support for 
-                        UTF-8 characters in Lua names
     lua-apl.c        -- Replacement for lua.c allowing immediate 
                         evaluation and display of APL expressions
 

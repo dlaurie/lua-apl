@@ -55,18 +55,14 @@ There are three things, or rather four, that you must do before using the Lua⋆
 
     Some characters are available on both keyboards, but beware: AltGr `∼∧⋆−∣` may look the same but are non-ASCII. There are no commonly accepted non-ASCII alternatives for `<>+=.,!?/\`, otherwise I would have used them too. The difference matters only at the Lua level: inside an APL expression, you may use either of the look-alike characters.
 
-3.  Rebuild your Lua so that 2-byte and 3-byte UTF-8 codepoints look like Lua names. You need to replace the original `lctype.c` file by the file `lctype-utf8.c` supplied here and do `make linux` or `make mingw` etc again. You may like to go the whole hog and also replace `lua.c` by the file `lua-apl.c`. See [Installing the APL interpreter](#installing-the-apl-interpreter).
+3.  Nothing to do with UTF-8, but you must follow the instructions are given in the comments to `apl.c` in order to get the module `apl_core`.
 
-    An unmodified Lua gives the following error message when `apl.lua` is loaded:
-
-    lua: apl.lua:3: <name> expected near char(226).
-
-4.  Nothing to do with UTF-8, but you must follow the instructions are given in the comments to `apl.c` in order to get the module `apl_core`.
+4.  Rebuild your Lua to make it recognize APL input and act accordingly. You need to replace `lua.c` by the file `lua-apl.c`. See [Installing the APL interpreter](#installing-the-apl-interpreter).
 
 Installing the APL interpreter
 ------------------------------
 
-Make a fresh copy of the 5.2.2 Lua source directory, copy the supplied `lctype-utf8.c` and `lua-apl.c` to replace `lctype.c` and `lua.c`, edit the Makefile in the Lua source directory to suit your environment, putting
+Make a fresh copy of the 5.2.2 Lua source directory, copy the supplied `lua-apl.c` to replace `lua.c`, edit the Makefile in the Lua source directory to suit your environment, for example putting
 
     MYCFLAGS=-DLUA_PROMPT='"   "' -DLUA_PROMPT2='""'
 
@@ -96,7 +92,7 @@ The last few lines show how to get interactive help.
        -- That's why it's still only 0.1
 
        n=10    -- this is straight Lua
-       (n,n)⍴(n+1)↑1  -- this is APL code to be evaluated immediately
+       (n,n)⍴(n+1)↑1
     1 0 0 0 0 0 0 0 0 0
     0 1 0 0 0 0 0 0 0 0
     0 0 1 0 0 0 0 0 0 0
@@ -108,39 +104,46 @@ The last few lines show how to get interactive help.
     0 0 0 0 0 0 0 0 1 0
     0 0 0 0 0 0 0 0 0 1
 
-       return ⍎'(n,n)⍴(n+1)↑1' -- The same code when played back
+       return apl"(n,n)⍴(n+1)↑1"() -- The same code when played back
        -- duplicate printout not shown here
       
-       f=∇"(n,n)⍴(n+1)↑1" -- the same code as a function definition
-       n=3                -- redefining the global variable
-       =f()               -- executing it
-    1 0 0
+       f=apl"(n,n)⍴(n+1)↑1" -- the same code as a function definition
+       n=3                  -- redefining the global variable
+       =f()                 -- executing it
+    1 0 0  
     0 1 0
     0 0 1
        
-       g=∇"(⍵,⍵)⍴(⍵+1)↑1" -- replacing the global variable by an argument
-       =g(5)              -- executing it
+       g=apl"(⍵,⍵)⍴(⍵+1)↑1" -- replacing the global variable by an argument
+       =g(5)                -- executing it
     1 0 0 0 0
     0 1 0 0 0
     0 0 1 0 0
     0 0 0 1 0
     0 0 0 0 1
 
-       h=∇"⍺÷⍵"       -- a function of two arguments
-       return h(5,8)  -- ⍵ is the first, ⍺ the second (explanation below)
+       h=apl"⍺÷⍵"       -- a function of two arguments
+       return h(5,8)    -- ⍵ is the first, ⍺ the second (explanation below)
     1.6
 
        =lua(g)        -- Show the Lua code that is actually executed
-    ∇: ⍴(↑(1,plus(1,⍵)),comma(⍵,⍵))
+    return Reshape(Take(1,Add(1,_w)),Attach2(_w,_w))
 
        help(apl)
-    Contents: ! + , . / < = > ? NaN \ _F _V backslash comma dot equal
-        greater less lua plus query set⍵ set⍺ shriek slash × ÷ ↑ ↓ ∇
-        ∊ − ∘ ∣ ∧ ∨ ∼ ≠ ≤ ≥ ⊖ ⊤ ⊥ ⋆ ⌈ ⌊ ⌷ ⌽ ⌿ ⍀ ⍉ ⍋ ⍎ ⍒ ⍕ ⍟ ⍪ ⍱ ⍲ ⍳ ⍴ ○
+    Contents: Abs Add And Attach Binom Ceil Circ Compress Copy Deal Decode
+    Disclose Div Down Drop Each Enclose Encode Exp Expand Fact Find Floor
+    Format Get Has Inner Ln Log MatDiv MatInv Max Min Mod Mul NaN Nand Nor
+    Not Or Outer Pass Pi Pow Range Ravel Recip Reduce Rerank Reshape Reverse
+    Roll Rotate SVD Same Scan Set Shape Sign Sub Take TestEq TestGE TestGT
+    TestLE TestLT TestNE Transpose Unm Up _act _format _rct help import lua
+    register util
 
+       help"APL"
+    Contents: ! + , . / < = > ? \ ¨ × ÷ ↑ ↓ ∇ ∊ − ∘ ∣ ∧
+        ∨ ∼ ≠ ≡ ≤ ≥ ⊂ ⊃ ⊖ ⊤ ⊥ ⋆ ⌈ ⌊ ⌹ ⌽ ⌿ ⍀ ⍉ ⍋ ⍎ ⍒ ⍕ ⍟ ⍪ ⍱ ⍲ ⍳ ⍴ ⎕ ○
        help"⍳"
-    1. IndexGenerator: ⍳⍵ → {1,2,...,⍵}
-    2. ⍺⍳⍵ → position of first occurrence of ⍵ in ⍺; not found is #⍺+1
+    Range: ⍳⍵ → {1,2,...,⍵}
+    Find: ⍺⍳⍵ → position of first occurrence of ⍵ in ⍺; not found is #⍺+1
 
 The above is probably not quite the same as what the current version would give (that applies to all the other examples too) but you get the idea.
 
@@ -149,7 +152,9 @@ If you know no APL
 
 APL functions are *niladic* (no arguments), *monadic* (one argument on the right of the name) or *dyadic* (two arguments, one to the left and one to the right of the name). In function definitions, the left and right arguments have the reserved names `⍺` and `⍵` respectively; a niladic function has neither. The distinction is only made at runtime. Unlike Lua, APL can overload function names to call different functions when called monadically to when called dyadically.
 
-An APL function can called from Lua by giving `⍵` as first and `⍺` as second argument, i.e. `3÷5` and `apl.÷(5,3)` do the same thing. This is confusing at first, but quite logical: the argument that might not be there is `⍺`, so it must come second.
+As shown above, you can use `help` to find out the Lua names of APL symbols or vice versa.
+
+An APL function can called from Lua by giving `⍵` as first and `⍺` as second argument, i.e. `3÷5` and `apl.Div(5,3)` do the same thing. This is confusing at first, but quite logical: the argument that might not be there is `⍺`, so it must come second.
 
 Functions cannot be called niladically from APL. You need to give at least `⍵`, even when you know that it will be ignored.
 

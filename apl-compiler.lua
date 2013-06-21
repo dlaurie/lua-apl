@@ -190,7 +190,7 @@ local preamble=[[local _w,_a=...
 
 load_apl = function(_w)
    checktype(_w,'string',1)
-   _w = _w:gsub("⍝[^\n]*\n"," ")  -- strip off APL comments
+   _w = _w:gsub("⍝[^\n]+"," "):gsub("\n"," ")  -- strip off APL comments
    local lua = apl2lua(_w)
    if select(2,_w:gsub('⋄',''))==0 then  
       lua="return "..lua 

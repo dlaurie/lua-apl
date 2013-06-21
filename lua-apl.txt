@@ -1,4 +1,6 @@
-<style type="text/css">code{white-space: pre; background-color: #FFFBE0}</style>
+<style type="text/css">
+  code{white-space: pre; background-color: #F1F1F1;}
+</style>
 
 Lua⋆APL User's Manual
 =====================
@@ -50,9 +52,10 @@ almost every APL dialect since about 1980, well summarized in the
 [Wikipedia article](http://en.wikipedia.org/wiki/APL_syntax_and_symbols).
 "Non-standard" in the case of Lua⋆APL means that I am using an unusual
 APL symbol without making any attempt even to find out how modern APL
-implementations use it. Please contact me if you feel that some other
-symbol for the same concept, or some other concept for the same symbol,
-is actually semi-standard by now.
+implementations use it (the latest APL that I take into account is APL2,
+and even in that case compatibility across the board is not aimed at). 
+Please contact me if you feel that some other symbol for the same concept, 
+or some other concept for the same symbol, is actually semi-standard by now.
 
 If you would like to know much more about APL than you currently do,
 there are several well-organized websites of modern commercial APLs,
@@ -387,17 +390,19 @@ the possibility.).
 
 A vector of vectors of the same length can be combined into a matrix,
 and a matrix can be converted to a nested array. These operations are
-so commonly needed that the non-standard APL function `Rerank` has 
-have been invented for them.
+so commonly needed that the APL2 notations `⊂` (Enclose) and `⊃` (Disclose)
+have been borrowed (but not with the exact same meaning), and the 
+non-standard APL function `Rerank` has have been invented as an
+umbrella for them in library mode.
 
+       help"⊂"
+    Enclose: ⊂⍵ makes an array of rows from a matrix
+       help"⊃"
+    Disclose: ⊃⍵ makes a matrix from an array of rows. Each ⍵[i] is treated as
+    a vector and padded to the maximum length using zeros or empty strings.
        help(Rerank)
-    Rerank: ⍺⎕⍵ → array of one rank higher or lower
-       1⎕⍵ → matrix whose rows are elements of ⍵
-       2⎕⍵ → matrix whose columns are elements of ⍵
-       If ⍺>0, each ⍵[i] is treated as a vector and padded to the maximum 
-          length by zeros or by empty strings.
-      ¯1⎕⍵ → vector whose elements are rows of ⍵
-      ¯2⎕⍵ → vector whose elements are columns of ⍵
+    Rerank: Rerank(_w,_a): array of one rank higher (_a>0) or lower (_a<0),
+       stacking rows (±1) or columns (±2). See Disclose/Enclose.
 
 ### Axis-dependent functions and operators
 
@@ -496,6 +501,10 @@ Classification of functions
 Part of the appeal of Iverson's design is the cogent uniformity of the
 behaviour of APL functions. Most functions fall in one of a small number
 of classes. 
+
+NB _This section will change a lot._ It does not describe either the
+status quo or what is planned, just some random thoughts around the
+topic.
 
 ### Primitive scalar functions
 
@@ -1169,19 +1178,22 @@ differences not listed or implied below.
 ### Downward incompatibilities
 
 1.  Complex numbers are not supported. Implications include that monadic `+` 
-    is `Copy`, not `Conjugate`,  monadic `×` is `Sign`, not `Direction`, etc.
+    means `Copy`, not `Conjugate`,  monadic `×` means `Sign`, not 
+    `Direction`, etc.
 2.  Arrays of rank higher than 2 are not supported. Implications include 
-    that there are `with axis` variations, no dyadic `⍉`, etc. Separate
-    functions and operators are provided for working along the first axis.
-3.  Nested arrays are provided via Lua tables. Implications include that 
-    is no dyadic `⊂` or `⊃`.
+    that is no dyadic `⍉`, etc, and that separate functions and operators 
+    are provided for working along the first axis.
+3.  Nested arrays are provided via Lua tables, respecting Lua's natural
+    row-wise order. Implications include that monadic `⊂` or `⊃` respectively
+    enclose or disclose rows (and if ever extended, will do one rank at
+    a time), and there is no dyadic `⊂` or `⊃`, etc.
 4.  System variables have different names and do different things.
 5.  Index origin 1, not selectable.
 6.  `≠`, `<`, `>` do not depend on comparison tolerance.
 7.  ASCII names for functions are often different even when the function
     is essentially the same, as motivated above under [Library Mode].
 8.  Monadic `≡` is Lua length; dyadic `≡` is Lua identity.
-9.  No `⍷`, monadic `∊`, `⌷`.
+9.  No `⍷`, monadic `∊` or `⌷`.
 10. TODO: Dyadic `~`.
 11. TODO: Monadic `↑`.
 12. TODO: Dyadic `⍒` and `⍋` (will work differently, though).
@@ -1197,3 +1209,5 @@ differences not listed or implied below.
     This could be used to provided some non-implemented functionality.
 3.  Namespaces.
 4.  `∇` and `⎕` are ordinary APL functions.
+
+

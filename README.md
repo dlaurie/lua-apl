@@ -55,7 +55,10 @@ There are three things, or rather four, that you must do before using the Lua⋆
 
     Some characters are available on both keyboards, but beware: AltGr `∼∧⋆−∣` may look the same but are non-ASCII. There are no commonly accepted non-ASCII alternatives for `<>+=.,!?/\`, otherwise I would have used them too. The difference matters only at the Lua level: inside an APL expression, you may use either of the look-alike characters.
 
-3.  Nothing to do with UTF-8, but you must follow the instructions are given in the comments to `apl.c` in order to get the module `apl_core`.
+    The above layout pays some respect to tradition, with changes mostly being additions.
+
+3.  Nothing to do with UTF-8, but you must follow the instructions
+     given in the comments to `apl.c` in order to get the module `apl_core`.
 
 4.  Rebuild your Lua to make it recognize APL input and act accordingly. You need to replace `lua.c` by the file `lua-apl.c`. See [Installing the APL interpreter](#installing-the-apl-interpreter).
 

@@ -77,7 +77,10 @@ Lua⋆APL package.
     at the Lua level: inside an APL expression, you may use either of 
     the look-alike characters.
 
-3.  Nothing to do with UTF-8, but you must follow the instructions are 
+    The above layout pays some respect to tradition, with changes
+    mostly being additions.
+
+3.  Nothing to do with UTF-8, but you must follow the instructions  
     given in the comments to `apl.c` in order to get the module `apl_core`.
 
 4.  Rebuild your Lua to make it recognize APL input and act accordingly. 

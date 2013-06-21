@@ -8,7 +8,9 @@
   <style type="text/css">code{white-space: pre;}</style>
 </head>
 <body>
-<style type="text/css">code{white-space: pre; background-color: #FFFBE0}</style>
+<style type="text/css">
+  code{white-space: pre; background-color: #F1F1F1;}
+</style>
 
 <h1 id="luaapl-users-manual">Lua⋆APL User's Manual</h1>
 <p>© Dirk Laurie 2013 Lua-style MIT licence</p>
@@ -22,7 +24,7 @@
 </ul>
 <p>The code examples shown here, even the ones in the section on Lua mode, use the three-space prompt of the Lua⋆APL standalone rather than the conventional Lua prompt, but all code except that shown in the section on <a href="#apl-mode">APL mode</a> works on a vanilla Lua interpreter too.</p>
 <p>In this document, we do not consistently use &quot;APL&quot; and &quot;Lua⋆APL&quot; as denoting different things. &quot;APL&quot; is a fairly vague term, meaning more or less &quot;a typical APL implementation&quot; or even &quot;the APL way of thinking&quot;, whereas &quot;Lua⋆APL&quot; is a specific term for this implementation, which of course also falls under the shadowy APL umbrella.</p>
-<p>Words like &quot;standard&quot; refer to features that are typically found in almost every APL dialect since about 1980, well summarized in the <a href="http://en.wikipedia.org/wiki/APL_syntax_and_symbols">Wikipedia article</a>. &quot;Non-standard&quot; in the case of Lua⋆APL means that I am using an unusual APL symbol without making any attempt even to find out how modern APL implementations use it. Please contact me if you feel that some other symbol for the same concept, or some other concept for the same symbol, is actually semi-standard by now.</p>
+<p>Words like &quot;standard&quot; refer to features that are typically found in almost every APL dialect since about 1980, well summarized in the <a href="http://en.wikipedia.org/wiki/APL_syntax_and_symbols">Wikipedia article</a>. &quot;Non-standard&quot; in the case of Lua⋆APL means that I am using an unusual APL symbol without making any attempt even to find out how modern APL implementations use it (the latest APL that I take into account is APL2, and even in that case compatibility across the board is not aimed at). Please contact me if you feel that some other symbol for the same concept, or some other concept for the same symbol, is actually semi-standard by now.</p>
 <p>If you would like to know much more about APL than you currently do, there are several well-organized websites of modern commercial APLs, e.g. <a href="http://www.microapl.com/apl_help">http://www.microapl.com/apl_help</a>.</p>
 <p>When I wrote this line, the version number displayed by the start-up message was <code>0.3.0</code>. As long as the first number is <code>0</code>, anything might still change.</p>
 <h1 id="library-mode">Library mode</h1>
@@ -230,15 +232,15 @@ true</code></pre>
 (2,3,4,5) (6,7,8,9)
    print(Each(Add,true,false)({{1,2,3,4},{5,6,7,8}},{1}))
 ./apl-lib.lua:497: bad argument #3 to &#39;both&#39; (shapes are incompatible)</code></pre>
-<p>A vector of vectors of the same length can be combined into a matrix, and a matrix can be converted to a nested array. These operations are so commonly needed that the non-standard APL function <code>Rerank</code> has have been invented for them.</p>
-<pre><code>   help(Rerank)
-Rerank: ⍺⎕⍵ → array of one rank higher or lower
-   1⎕⍵ → matrix whose rows are elements of ⍵
-   2⎕⍵ → matrix whose columns are elements of ⍵
-   If ⍺&gt;0, each ⍵[i] is treated as a vector and padded to the maximum 
-      length by zeros or by empty strings.
-  ¯1⎕⍵ → vector whose elements are rows of ⍵
-  ¯2⎕⍵ → vector whose elements are columns of ⍵</code></pre>
+<p>A vector of vectors of the same length can be combined into a matrix, and a matrix can be converted to a nested array. These operations are so commonly needed that the APL2 notations <code>⊂</code> (Enclose) and <code>⊃</code> (Disclose) have been borrowed (but not with the exact same meaning), and the non-standard APL function <code>Rerank</code> has have been invented as an umbrella for them in library mode.</p>
+<pre><code>   help&quot;⊂&quot;
+Enclose: ⊂⍵ makes an array of rows from a matrix
+   help&quot;⊃&quot;
+Disclose: ⊃⍵ makes a matrix from an array of rows. Each ⍵[i] is treated as
+a vector and padded to the maximum length using zeros or empty strings.
+   help(Rerank)
+Rerank: Rerank(_w,_a): array of one rank higher (_a&gt;0) or lower (_a&lt;0),
+   stacking rows (±1) or columns (±2). See Disclose/Enclose.</code></pre>
 <h3 id="axis-dependent-functions-and-operators">Axis-dependent functions and operators</h3>
 <p>Several APL vector functions generalize to matrices by operating either on the rows or on the columns. In APL notation, the distinction is made by using different symbols (<code>⊖ ⌿ ⍀ ⍪</code> are the row-wise counterparts to <code>⌽ / \ ,</code>). In library mode, there is no need to avoid an extra axis argument, and so there is only one function name.</p>
 <pre><code>   help(Attach)
@@ -277,6 +279,7 @@ Attach(⍵,⍺,2): ⍺,⍵ → columns of ⍺ followed by rows of ⍵
 <p>Library mode knows no UTF-8. If you need to operate on individual UTF-8 codepoints, see <a href="#lua-mode">Lua mode</a>.</p>
 <h2 id="classification-of-functions">Classification of functions</h2>
 <p>Part of the appeal of Iverson's design is the cogent uniformity of the behaviour of APL functions. Most functions fall in one of a small number of classes.</p>
+<p>NB <em>This section will change a lot.</em> It does not describe either the status quo or what is planned, just some random thoughts around the topic.</p>
 <h3 id="primitive-scalar-functions">Primitive scalar functions</h3>
 <p>About one-half of all APL functions give scalar results when applied to scalars, and are applied term-by-term to arrays, giving an array of the same shape.</p>
 <p>In the case of dyadic functions, it is a little more complicated, but the same for all of them.</p>
@@ -662,15 +665,15 @@ Rotate(⍵,⍺,2): ⍺⌽⍵ → elements in rows of ⍵ rotated left by ⍺ or 
 <p>Differences of which I am aware between features provided by APL2 and Lua⋆APL are listed below. Unless marked &quot;TODO&quot;, there are no plans to resolve those differences. I would like, though, to be told of any differences not listed or implied below.</p>
 <h3 id="downward-incompatibilities">Downward incompatibilities</h3>
 <ol style="list-style-type: decimal">
-<li>Complex numbers are not supported. Implications include that monadic <code>+</code> is <code>Copy</code>, not <code>Conjugate</code>, monadic <code>×</code> is <code>Sign</code>, not <code>Direction</code>, etc.</li>
-<li>Arrays of rank higher than 2 are not supported. Implications include that there are <code>with axis</code> variations, no dyadic <code>⍉</code>, etc. Separate functions and operators are provided for working along the first axis.</li>
-<li>Nested arrays are provided via Lua tables. Implications include that is no dyadic <code>⊂</code> or <code>⊃</code>.</li>
+<li>Complex numbers are not supported. Implications include that monadic <code>+</code> means <code>Copy</code>, not <code>Conjugate</code>, monadic <code>×</code> means <code>Sign</code>, not <code>Direction</code>, etc.</li>
+<li>Arrays of rank higher than 2 are not supported. Implications include that is no dyadic <code>⍉</code>, etc, and that separate functions and operators are provided for working along the first axis.</li>
+<li>Nested arrays are provided via Lua tables, respecting Lua's natural row-wise order. Implications include that monadic <code>⊂</code> or <code>⊃</code> respectively enclose or disclose rows (and if ever extended, will do one rank at a time), and there is no dyadic <code>⊂</code> or <code>⊃</code>, etc.</li>
 <li>System variables have different names and do different things.</li>
 <li>Index origin 1, not selectable.</li>
 <li><code>≠</code>, <code>&lt;</code>, <code>&gt;</code> do not depend on comparison tolerance.</li>
 <li>ASCII names for functions are often different even when the function is essentially the same, as motivated above under [Library Mode].</li>
 <li>Monadic <code>≡</code> is Lua length; dyadic <code>≡</code> is Lua identity.</li>
-<li>No <code>⍷</code>, monadic <code>∊</code>, <code>⌷</code>.</li>
+<li>No <code>⍷</code>, monadic <code>∊</code> or <code>⌷</code>.</li>
 <li>TODO: Dyadic <code>~</code>.</li>
 <li>TODO: Monadic <code>↑</code>.</li>
 <li>TODO: Dyadic <code>⍒</code> and <code>⍋</code> (will work differently, though).</li>

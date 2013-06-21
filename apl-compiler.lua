@@ -309,6 +309,7 @@ help(Execute,"Execute: ⍎⍵ → Define(⍵)()")
 register(1,Define,'∇','Define')
 register(1,Execute,'⍎','Execute')
 register(1,Print,'⎕','Output')
+register(1,function(x) return #x end,'≡','Length')
 
 local _F=apl._F
 apl.help = function(topic,...)

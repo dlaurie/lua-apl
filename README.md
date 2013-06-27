@@ -5,31 +5,48 @@ Lua⋆APL
 
 Lua⋆APL is Lua powered by APL. (That's an APL pun.) If the symbol between Lua and APL in Lua⋆APL does not look like a five-pointed star, chances are the rest will look unintelligible too. Get yourself a proper APL-enabled screen font as described in [UTF-8 essentials](#utf-8-essentials).
 
-The main module table contains mostly Lua functions with APL names, by and large doing what the corresponding APL functions would do, but operating on Lua numbers, strings, tables and functions.
+The module table contains mostly Lua functions mapped to APL names, by and large doing what the corresponding APL functions would do, but operating on Lua numbers, strings, tables and functions.
+
+The present version checks that its host Lua satisfies `_VERSION=="Lua 5.2"`.
 
 Package contents
 ----------------
 
-    apl-lib.lua      -- Returns the module table for library mode
-    apl-compiler.lua -- Returns the module table for Lua mode
-    funclists.lua    -- A utility useful only when modifying Lua⋆APL itself.
-    help.lua         -- Returns the required module 'help'
-    test.lua         -- Tests a large selection of features
-    finnaplidiom.lua -- A Lua module containing the FinnAPL idiom library,
-                        needed by test.lua.
-    apl385.ttf       -- A public-domain APL font by Adrian Smith
-    lua-apl.xmodmap  -- APL key mappings for X
-    README.md        -- What you are reading now
-    lua-apl.html     -- User's manual
-    prog-guide.html  -- Programmer's guide (i.e. for this software itself)
+This is what you should find in `lua-apl.zip`.
+
+    apl.lua          -- Lua code for the module
+    help.lua         -- Module 'help' required by apl.lua
     apl.c            -- Supporting routines in C 
     lua-apl.c        -- Replacement for lua.c allowing immediate 
                         evaluation and display of APL expressions
+    Makefile         -- Gnu makefile for Linux systems
+
+    apl385.ttf       -- A public-domain APL font by Adrian Smith
+    lua-apl.xmodmap  -- APL key mappings for X
+
+    README.md        -- What you are reading now
+    lua-apl.html     -- User's manual
+    prog-guide.html  -- Programmer's guide (i.e. for this software itself)
+
+    test.lua         -- Tests a large selection of features
+    finnaplidiom.lua -- A Lua module containing the FinnAPL idiom library.
+
+External dependencies
+---------------------
+
+    lpeg             -- Roberto Ierusalimschy's LPeg package
+    lapack           -- Well-known linear algebra package, must be 
+                        available to the C compiler as `-l lapack`.                    
+
+Installation of the Lua module
+------------------------------
+
+On a Linux system, make sure that you have `lpeg` and `lapack` installed, and type `make` in the module directory. Copy `apl_core.so`, `help.lua` and `apl.lua` to where your `package.cpath` and `package.path` will find it.
+
+On a non-Linux system, if you get it running, tell me how and and I will put the intructions in with due acknowledgment.
 
 UTF-8 essentials
 ----------------
-
-There are three things, or rather four, that you must do before using the Lua⋆APL package.
 
 1.  Get a UTF-8 font with decent APL glyphs. `apl385.ttf` is recommended. On Linux systems you put it in `$HOME/.fonts` and select it from your application's font selector. I'm told it is even easier on Windows systems.
 
@@ -57,42 +74,43 @@ There are three things, or rather four, that you must do before using the Lua⋆
 
     The above layout pays some respect to tradition, with changes mostly being additions.
 
-3.  Nothing to do with UTF-8, but you must follow the instructions
-     given in the comments to `apl.c` in order to get the module `apl_core`.
-
-4.  Rebuild your Lua to make it recognize APL input and act accordingly. You need to replace `lua.c` by the file `lua-apl.c`. See [Installing the APL interpreter](#installing-the-apl-interpreter).
-
 Installing the APL interpreter
 ------------------------------
 
-Make a fresh copy of the 5.2.2 Lua source directory, copy the supplied `lua-apl.c` to replace `lua.c`, edit the Makefile in the Lua source directory to suit your environment, for example putting
+This is optional: you can do everything almost as easily without it.
 
-    MYCFLAGS=-DLUA_PROMPT='"   "' -DLUA_PROMPT2='""'
+1.  Copy the `src` sundirectory of the 5.2.2 Lua source to your module directory.
+2.  Optionally, customize `src/Makefile`. For example, I like to put
 
-so that your session will look like an APL session instead of a Lua session, and do `make linux` or `make mingw` or whatever is appropriate for your system.
+    MYCFLAGS=-DLUA\_PROMPT='" "' -DLUA\_PROMPT2='""'
 
-Copy the Lua executable you have just made to your execution path, changing its name to `lua-apl` or `lua-apl.exe`.
+    so that my session will looks like an APL session instead of a Lua session.
+3.  Copy the supplied `lua-apl.c` to replace `src/lua.c`
+4.  While inside `src`, do `make linux` or `make mingw` or whatever is appropriate for your system.
+5.  Copy the Lua executable `src/lua` you have just made to your execution path, changing its name to `lua-apl` or `lua-apl.exe`.
 
-Make sure that `apl.lua` and `apl-core.so` or `apl-core.dll` are properly installed and your keyboard is APL-enabled, and type `apl`.
+Make sure that `apl.lua`, `help.lua` and `apl-core.so` or `apl-core.dll` are properly installed and your keyboard is APL-enabled, and do `lua-apl`.
 
 Quick start
 -----------
 
 We'll do this as a transcript of an interactive session at a terminal running `bash`. The resulting experience has quite a realistic APL-like look and feel.
 
-The first few lines show how to use APL as a desk calculator.
+The first few lines show how to use APL as a desk calculator, and what you would need to do if you prefer not to compile the interpreter.
 
 The next few lines show how to define Lua functions in APL.
 
 The last few lines show how to get interactive help.
 
-    …/apl$ lua-apl     # The APL-enabled Lua interpreter
+    $ lua-apl
     Lua 5.2.2  Copyright (C) 1994-2013 Lua.org, PUC-Rio
-    Lua⋆APL 0.1
-    The following forward declarations were not completed
-    Contents: MatrixDivide MatrixInverse
-    WARNING: Not all functions that should respect shape do so yet.
-       -- That's why it's still only 0.1
+    Lua⋆APL 0.4.0 © Dirk Laurie 2013
+    Lua⋆APL 0.4.0 (Lua code) © Dirk Laurie 2013
+    Bug reports are welcome. You'll find me on Lua-L.
+    If you can't remember the README, do this:
+      help'start'
+    In Lua mode, you will need `apl:import()` first.
+    --
 
        n=10    -- this is straight Lua
        (n,n)⍴(n+1)↑1
@@ -106,49 +124,52 @@ The last few lines show how to get interactive help.
     0 0 0 0 0 0 0 1 0 0
     0 0 0 0 0 0 0 0 1 0
     0 0 0 0 0 0 0 0 0 1
+       return apl"(n,n)⍴(n+1)↑1"()
+    -- The above is what the previous line looks like on replay on
+    -- systems with readline history. That's all that the interactive
+    -- interpreter does.
 
-       return apl"(n,n)⍴(n+1)↑1"() -- The same code when played back
-       -- duplicate printout not shown here
-      
        f=apl"(n,n)⍴(n+1)↑1" -- the same code as a function definition
        n=3                  -- redefining the global variable
        =f()                 -- executing it
-    1 0 0  
+    1 0 0
     0 1 0
     0 0 1
-       
        g=apl"(⍵,⍵)⍴(⍵+1)↑1" -- replacing the global variable by an argument
+        =g(5)                -- executing it
+    stdin:1: unexpected symbol near '='
        =g(5)                -- executing it
     1 0 0 0 0
     0 1 0 0 0
     0 0 1 0 0
     0 0 0 1 0
     0 0 0 0 1
-
        h=apl"⍺÷⍵"       -- a function of two arguments
        return h(5,8)    -- ⍵ is the first, ⍺ the second (explanation below)
     1.6
-
        =lua(g)        -- Show the Lua code that is actually executed
     return Reshape(Take(1,Add(1,_w)),Attach2(_w,_w))
 
        help(apl)
-    Contents: Abs Add And Attach Binom Ceil Circ Compress Copy Deal Decode
-    Disclose Div Down Drop Each Enclose Encode Exp Expand Fact Find Floor
-    Format Get Has Inner Ln Log MatDiv MatInv Max Min Mod Mul NaN Nand Nor
-    Not Or Outer Pass Pi Pow Range Ravel Recip Reduce Rerank Reshape Reverse
-    Roll Rotate SVD Same Scan Set Shape Sign Sub Take TestEq TestGE TestGT
-    TestLE TestLT TestNE Transpose Unm Up _act _format _rct help import lua
-    register util
-
+    Contents: Abs Add And Assign Attach Attach1 Attach2 Binom Ceil Circ
+        Compress Compress1 Compress2 Copy Deal Decode Define Disclose Div Down
+        Drop Each Enclose Encode Execute Exp Expand Expand1 Expand2 Fact Find
+        Floor Format Has Inner Length Ln Log MatDiv MatInv Max Min Mod Mul Nand
+        Nor Not Or Outer Output Pass Pi Pow Range Ravel Recip Reduce Reduce1
+        Reduce2 Reshape Reverse Reverse1 Reverse2 Roll Rotate Rotate1 Rotate2
+        Same Scan Scan1 Scan2 Shape Sign Sub Take TestEq TestGE TestGT TestLE
+        TestLT TestNE ToString Transpose Unm Up _act _rct help import lua
+        register util
        help"APL"
     Contents: ! + , . / < = > ? \ ¨ × ÷ ↑ ↓ ∇ ∊ − ∘ ∣ ∧
         ∨ ∼ ≠ ≡ ≤ ≥ ⊂ ⊃ ⊖ ⊤ ⊥ ⋆ ⌈ ⌊ ⌹ ⌽ ⌿ ⍀ ⍉ ⍋ ⍎ ⍒ ⍕ ⍟ ⍪ ⍱ ⍲ ⍳ ⍴ ⎕ ○
        help"⍳"
-    Range: ⍳⍵ → {1,2,...,⍵}
+    Range: ⍳⍵ → first ⍵ integers starting at 1
+           ⍺⍳⍵ → first ⍵ integers starting at ⍺ 
     Find: ⍺⍳⍵ → position of first occurrence of ⍵ in ⍺; not found is #⍺+1
 
-The above is probably not quite the same as what the current version would give (that applies to all the other examples too) but you get the idea.
+    The above is probably not quite the same as what the current version would 
+    give (that applies to all the other examples too) but you get the idea.
 
 If you know no APL
 ------------------

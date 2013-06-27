@@ -19,7 +19,7 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-#define LUA_APL_VERSION "Lua⋆APL 0.3.0"
+#define LUA_APL_VERSION "Lua⋆APL 0.4.0"
 #define LUA_APL_COPYRIGHT " © Dirk Laurie 2013"
 
 #if !defined(LUA_PROMPT)
@@ -512,8 +512,8 @@ static int pmain (lua_State *L) {
 int main (int argc, char **argv) {
   int status, result, k;
   char *myarg[argc+5], *arg[]={
-    "-l","apl-compiler",
-    "-e","apl=require'apl-compiler'; apl:import()",
+    "-l","apl",
+    "-e","apl:import()",
     "-i"};
   if (argc>1) {
     printf("Error: lua-apl does not accept extra command-line arguments\n");

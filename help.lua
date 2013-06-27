@@ -125,7 +125,7 @@ fold = function(s)
 -- remove the line declaring it to be local.
   if utflen(s)<=72 then return s end
   local n=74
-  while n>50 do n=n-1; if s:sub(n,n):match"%s" then break end end
+  while n>60 do n=n-1; if s:sub(n,n):match"%s" then break end end
   return s:sub(1,n-1)..'\n    '..fold(s:sub(n+1))
 end  
 

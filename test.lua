@@ -1,4 +1,6 @@
-apl=require"apl-compiler"
+_APL_LEVEL=arg[1] and tonumber(arg[1]) or 2
+apl=require"apl"
+print ("APL Level ".._APL_LEVEL)
 apl:import()
 idiom = require "finnaplidiom"
 
@@ -8,7 +10,65 @@ local function Str(x,y)
 end
 apl.register(1,Str,'§','Str')
 
-tests = [[
+local tests = {}
+
+tests[0] = [[
+j←5 3 1
+_A←⍳10
+A[2]
+A[5]←-5
+!10
+'%24.16f'⍕1○○÷6
+(∘1)⍕∘1
+§65
+⍟¯1
+⍕⍟¯1
+]]
+
+tests[1] = [[
+j←⍒A←?10⍴100
+A[j]
+A,0↑A[5]←-5
+n←(0,⍳10)!10
+f←2 3⍴¨5 4
+⊖f
+⊃f
+1 2 3○○÷6 1 4
+○÷¯1 ¯2 ¯3○⎕1 2 3○○÷6 1 4
+(∘1)⍕∘1
+§32+⍳94
+⍟¯1,0○1.4
+0 1∘.∨0 1
+0 1∘.∧0 1
+0 1∘.⍱0 1
+0 1∘.⍲0 1
+10|(⍳9)∘.+⍳9
+'raw'⍕10|(⍳9)∘.+⍳9
+10⊥⍳9
+(10⍴10)⊤!10
+10|(⍳9)∘.×⍳9
+10|(⍳9)∘.-⍳9
+10|(⍳9)∘.<⍳9
+10|(⍳9)∘.≤⍳9
+10|(⍳9)∘.=⍳9
+10|(⍳9)∘.>⍳9
+10|(⍳9)∘.≠⍳9
+10|(⍳9)∘.⌈⍳9
+10|(⍳9)∘.⌊⍳9
+10|(⍳9)∘.|⍳9
+⌈(⍳9)∘.÷⍳9
+⌊(⍳9)∘.÷⍳9
+1 2 3=1 3⍴1 2 3
+1 2 3≡1 3⍴1 2 3
+⍺←⍳2 ⋄ y←⍺+2 ⋄ x←⍺-y×⍺⌹y
+x+.×y
+⌹3 4
++/(⍳10)⋆2
+⌽+\(⍳10)⋆2
+⌈/0⍴0
+]]
+
+tests[2] = [[
 2 3⍴¨5 4
 j←⍒A←?10⍴100
 A[j]
@@ -45,10 +105,10 @@ f←n⍪?n
 ⌊(⍳9)∘.÷⍳9
 1 2 3=1 3⍴1 2 3
 1 2 3≡1 3⍴1 2 3
-(⍳3)⌹3 4⍴⍳12
-(⍳4)⌹⍉3 4⍴⍳12
 +/(⍳10)⋆2
 ⌽+\(⍳10)⋆2
+(⍳3)⌹3 4⍴⍳12
+(⍳4)⌹⍉3 4⍴⍳12
 ]]
 
 aplchars = [[! + , . / < = > ? \ § ¨ × ÷ ↑ ↓ ∇ ∊ − ∘ ∣ ∧ ∨ ∼ ≠ ≡ ≤ ≥ ⊂ ⊃ ⊖ ⊤ ⊥ ⋆ ⌈ ⌊ ⌹ ⌽ ⌿ ⍀ ⍉ ⍋ ⍎ ⍒ ⍕ ⍟ ⍪ ⍱ ⍲ ⍳ ⍴ ⎕ ○]]
@@ -65,10 +125,12 @@ function occurs(S,k)
 end   
 
 print""
-for S in tests:gmatch"[^\n]+" do
+for S in tests[_APL_LEVEL]:gmatch"[^\n]+" do
    if S:match"%S" then
       f=apl(S) 
-      print('   '..S..' → '..lua(f)); print(tostring(f()))
+      print('   '..S..' → '..lua(f)) 
+      local res=f()
+      if res then print(tostring(res)) end
       for k in aplchars:gmatch"%S+" do
          local c=occurs(S,k)
          if c>0 then             

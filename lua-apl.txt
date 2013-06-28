@@ -17,13 +17,15 @@ of Lua that gives access to the power of APL (the APL asterisk `⋆` means
 There are three modes of usage, which can be thought of as analogous to
 the C API, scripting language, and standalone executable of Lua.
 
--   [Library mode]: APL functionality is offered as a Lua library, which
+Library mode: 
+~   APL functionality is offered as a Lua library, which
     makes no use of the APL character set except in its help 
     information. You type in Lua commands like:
 
         Reshape(Take(1,Add(1,n)),Attach2(n,n))
 
--   [Lua mode]: Functions callable from Lua can be written in APL. This is
+Lua mode: 
+~   Functions callable from Lua can be written in APL. This is
     achieved via a function `apl` rather like Lua's `load`, which 
     generates intermediate Lua code consisting of chained calls to the APL
     library. You type in Lua commands like:
@@ -33,7 +35,8 @@ the C API, scripting language, and standalone executable of Lua.
     The APL compiler translates this to the string of calls shown
     above.
 
--   [APL mode]: Bare APL code can be entered directly at the terminal,
+APL mode: 
+~   Bare APL code can be entered directly at the terminal,
     mixed with Lua code. You type in APL commands like:
 
         (n,n)⍴(n+1)↑1
@@ -43,7 +46,7 @@ the C API, scripting language, and standalone executable of Lua.
     interpreter does not do the translation.
 
     This works because APL code has such a distinctive appearance. Even 
-    a primitive guessing algorithm can identify APl code with a high 
+    a primitive guessing algorithm can identify APL code with a high 
     rate of accuracy. Code deemed to be APL is translated to load and
     execute as in Lua mode, but the result is printed by default as 
     typical APL systems do. The effect is to give an APL-like 
@@ -114,6 +117,7 @@ The module returns a table with keys named by the following convention:
 -  `CamelCase`: APL functions (mostly mapped to APL symbols later)
 -  `lowercase`: Lua functions (not usually called from APL code)
 -  `_CAPS`:     needed by the system or providing information
+-  `_lowercase`: control variables
 
 "APL functions" of course does not imply that they are anything else
 than just Lua functions. It merely means that these are mostly the 
@@ -440,7 +444,7 @@ umbrella for them in library mode.
 Several APL vector functions generalize to matrices by operating either
 on the rows or on the columns. In APL notation, the distinction is
 made by using different symbols (`⊖ ⌿ ⍀ ⍪` are the row-wise counterparts
-to `⌽ / \ ,`). There are three different functions at issue here.
+to `⌽ / \ ,`). There are typically three different functions at issue here.
 
        help(Attach)
     Attach(⍵,⍺): ⍺,⍵ → elements of ⍺ followed by elements of ⍵
@@ -456,7 +460,7 @@ to `⌽ / \ ,`). There are three different functions at issue here.
     [3,1,2]
 
 As you can see, `Attach1` pads short rows to the length of the longest list.
-`Attach1` pads short columns, but vectors count as one-row matrices.
+`Attach2` pads short columns, but vectors count as one-row matrices.
 
 In Lua⋆APL, the principle is "act on rows when the axis is 1, act 
 on colums when the axis is 2", and the implementation is to convert 
@@ -634,7 +638,7 @@ The compiler works as follows:
     bottom of my heart for this absolutely ideal tool.
 
 3.  The result of the previous step is a chunk of Lua code, which looks
-    exactly like what you would code in Lua mode, and a number
+    almost exactly like what you would code in library mode, and a number
     identifying the position in the APL code at which the compiler could
     not continue. If that is before the end of the string, the
     compilation failed, and the APL code is displayed with an arrow
@@ -776,11 +780,11 @@ arguments and result as ambivalent.
 
 Monadic operators
 :   A monadic operator acts on a function (which is the left argument
-of the operator) to form another function.
+    of the operator) to form another function.
 
 Dyadic operators
 :   A dyadic operator acts on a pair of functions to form a single
-function. 
+    function. 
 
 Other implementations are not always as catholic as the above suggests;
 some APLs do not allow operators to act on user-defined functions.
@@ -998,11 +1002,11 @@ expression have failed.
       + leftarg*dyadic_func*expr 
       + monadic_func*expr
       + leftarg;
-    dyadic_func = amphiadic_func + Dyadic_function;
-    monadic_func = amphiadic_func + Monadic_function;
+    dyadic_func = ambivalent + Dyadic_function;
+    monadic_func = ambivalent + Monadic_function;
     func_expr = '('*(dyadic_func+Monadic_function)*')'
       + Dyadic_function + Monadic_function;
-    amphiadic_func = func_expr*Monadic_operator
+    ambivalent = func_expr*Monadic_operator
        + func_expr*Dyadic_operator*func_expr;
     leftarg = value + '('*expr*')';
     value = Vector + String +
@@ -1135,54 +1139,4 @@ Some other important points have not been illustrated in the short sample.
     will notice that your input has been changed to what you would have
     typed in Lua mode, e.g. `2 3⌽A` turns into `return apl"2 3⌽A"()`.
 
-
-Comparison with APL2
---------------------
-
-Though not an official standard, IBM's APL2 was a landmark and is well 
-documented (google for `APL2LanguageRef.pdf`). Lua⋆APL is not and will
-not be an implementation of the same APL dialect as APL2, but in cases
-where Lua⋆APL extends older APL usage in the same way as APL2 does,
-I have tried to use the same symbol for the extension.
-
-Differences of which I am aware between features provided by APL2 and 
-Lua⋆APL are listed below. Unless marked "TODO", there are no plans to 
-resolve those differences. I would like, though, to be told of any 
-differences not listed or implied below.
-
-### Downward incompatibilities
-
-1.  Complex numbers are not supported. Implications include that monadic `+` 
-    means `Copy`, not `Conjugate`,  monadic `×` means `Sign`, not 
-    `Direction`, etc.
-2.  Arrays of rank higher than 2 are not supported. Implications include 
-    that is no dyadic `⍉`, etc, and that separate functions and operators 
-    are provided for working along the first axis.
-3.  Nested arrays are provided via Lua tables, respecting Lua's natural
-    row-wise order. Implications include that monadic `⊂` or `⊃` respectively
-    enclose or disclose rows (and if ever extended, will do one rank at
-    a time), and there is no dyadic `⊂` or `⊃`, etc.
-4.  System variables have different names and do different things.
-5.  Index origin 1, not selectable.
-6.  `≠`, `<`, `>` do not depend on comparison tolerance.
-7.  ASCII names for functions are often different even when the function
-    is essentially the same, as motivated above under [Library Mode].
-8.  Monadic `≡` is Lua length; dyadic `≡` is Lua identity.
-9.  No `⍷`, monadic `∊` or `⌷`.
-10. TODO: Dyadic `~`.
-11. TODO: Monadic `↑`.
-12. TODO: Dyadic `⍒` and `⍋` (will work differently, though).
-
-### Upward incompatibilities
-
-1.  Lua⋆APL is a Lua package. All of Lua is available. The implications 
-    are not individually listed; they include that scalars can be any 
-    Lua value except a table, Lua functions can be used to index an
-    array, arrays can be modified at the Lua level, some string-valued
-    keys are used, etc.
-2.  Lua⋆APL can be extended by Lua functions registered under APL names.
-    This could be used to provided some non-implemented functionality.
-3.  Namespaces.
-4.  `∇` and `⎕` are ordinary APL functions.
-5.  Lua⋆APL supports strings, not character arrays.
 

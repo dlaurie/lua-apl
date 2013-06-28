@@ -35,10 +35,70 @@
 <p>The program is divided into five main sections. The first section defines semi-globals, i.e. local variables whose scope is the entire file, plus the APL compiler. Among the semi-globals are twenty-odd short functions that are later exported in <code>apl.util</code>.</p>
 <p>The next three sections define levels 0, 1 and 2. Each section is almost a module on its own in the sense that dependencies (except semi-globals) are explicitly assigned to local variables.</p>
 <p>The final section populates the module table from the components <code>f1, f2, op1, op2, lib</code> and does some final finishing-off.</p>
+<h2 id="utilities">Utilities</h2>
+<ol style="list-style-type: decimal">
+<li>All functions that will be defined are declared forward as locals. This allows the routines to refer to each other. The programmer is responsible for avoiding circular references.</li>
+<li>The functions themselves follow in alphabetic order.</li>
+<li>They are collected into a table and assigned to <code>apl.util</code>.</li>
+</ol>
+<h2 id="compiler">Compiler</h2>
+<p>The entire compiler consists of a single LPEG grammar, preceded by the definition of its terminals. Considerable thought has gone into the order of alternatives and changes should not be undertaken lightly.</p>
+<p>Several functions depend on the compiler, and the opportunity is also taken to define a couple of UTF-8 utilities before the necessary patterns go out of scope.</p>
+<p>The redefinition of <code>help</code> is made inside the compiler scope for no very good reason; earlier versions required access to some of the compiler tables.</p>
 <h2 id="level-0">Level 0</h2>
+<p>This level is fairly straightforward. The code appears in this order:</p>
+<ol start="2" style="list-style-type: decimal">
+<li>Local aliases for functions in global tables are defined. This fixes the function being called to be the one current at the stage that the module is loaded.</li>
+<li>Local utility functions, not needed at the other levels and not useful enough to export as utilities, are defined.</li>
+<li>The forward-declared functions appear in alphabetic order. Local auxiliary functions needed only by a particular library function are declared immediately before the library function itself.</li>
+<li>The functions are collected into tables <code>lib</code> for functions that will not be revealed to the Lua compiler, <code>f1</code> for monadic and <code>f2</code> for dyadic functions that will later be extended to apply to arrays, <code>gen1</code> and <code>gen2</code> for dyadic functions that will not be so extended.</li>
+<li>The routines are inserted into the corresponding tables (<code>apl.f1</code> etc.) by the <code>replace</code> utility.</li>
+<li>Help is defined (the use of function keys gives a way to check that the corresponding function has been defined).</li>
+</ol>
+<h2 id="level-1">Level 1</h2>
+<p>This level has two parts. First, the functions that need to be extended are redefined with the aid of the <code>each</code> and <code>both</code> utilities. For these functions, it is necessary to copy over the help information, since <code>help</code> uses the function itself to index its tables.</p>
+<p>Then follows much the same code layout as at Level 1 for the new functions. The main difference is that <code>replace</code> is called with three arguments: if the value associated with a name is being changed, the old value is saved in the table specified by the third argument.</p>
+<p>A subtlety here is that some functions appear in more than one list. For example <code>Attach</code> is stored as <code>lib.Attach</code>, <code>f2.Attach1</code> and <code>f2.Attach2</code>. The reason is that the compiler knows two symbols, <code>,</code> and <code>⍪</code>, that at Level 1 are both mapped to <code>Attach</code>, but at Level 2 will be mapped to different functions. The other two names are given to remain compatible with the compiler.</p>
+<h2 id="level-2">Level 2</h2>
+<p>At this level, almost all the functions being defined are matrix versions of Level 1 functions of the same name. Most of them invoke the Level 1 version in some way.</p>
+<p>The functions that will be called but are to be superseded are given local names, mostly simply by converting the name to lower case but occasionally (<code>rawformat</code>,<code>vecget</code> etc) modified to avoid confusion. Level 1 functions that are called but not superseded retain their CamelCase names.</p>
+<p>For these functions, the help information is copied over in a separate loop, since <code>replace</code> does not do so.</p>
+<p>The functions that at Level 1 appeared in more than one list here form a separate group. They are extended at Level 2 to offer two possibilities, one for row-wise and one for column-wise application. The extended versions have new help information. The Level 1 versions with their help information are still available under the name that contains no axis digit.</p>
+<h2 id="building-the-compiler-tables">Building the compiler tables</h2>
+<p>At the end of Level 2, the compiler knows almost no APL yet. The whole language is contained in four tables defining the Lua-APL dictionary, which are used together with the information in <code>apl.f1</code> etc to build the registry tables.</p>
+<p>The units for functions that allow scanning and reducing over empty vectors are also defined here.</p>
+<h2 id="finishing-off">Finishing off</h2>
+<p>Miscellaneous small tasks are done here, such as initializing the comparison tolerances, issuing the start-up message, etc.</p>
+<h1 id="comparison-with-apl2">Comparison with APL2</h1>
+<p>Though not an official standard, IBM's APL2 was a landmark and is well documented (google for <code>APL2LanguageRef.pdf</code>). Lua⋆APL is not and will not be an implementation of the same APL dialect as APL2, but in cases where Lua⋆APL extends older APL usage in the same way as APL2 does, I have tried to use the same symbol for the extension.</p>
+<p>Differences of which I am aware between features provided by APL2 and Lua⋆APL are listed below. Unless marked &quot;TODO&quot;, there are no plans to resolve those differences. Even the &quot;TODO&quot;'s are not all features that I am sure about.</p>
+<p>I would like, though, to be told of any differences not listed or implied below.</p>
+<h3 id="downward-incompatibilities">Downward incompatibilities</h3>
+<ol style="list-style-type: decimal">
+<li>Complex numbers are not supported. Implications include that monadic <code>+</code> means <code>Copy</code>, not <code>Conjugate</code>, monadic <code>×</code> means <code>Sign</code>, not <code>Direction</code>, etc.</li>
+<li>Arrays of rank higher than 2 are not supported. Implications include that is no dyadic <code>⍉</code>, etc, and that separate functions and operators are provided for working along the first axis.</li>
+<li>Nested arrays are provided via Lua tables, respecting Lua's natural row-wise order. Implications include that monadic <code>⊂</code> or <code>⊃</code> respectively enclose or disclose rows (and if ever extended, will do one rank at a time), and there is no dyadic <code>⊂</code> or <code>⊃</code>, etc.</li>
+<li>System variables have different names and do different things.</li>
+<li>Index origin 1, not selectable.</li>
+<li><code>≠</code>, <code>&lt;</code>, <code>&gt;</code> do not depend on comparison tolerance.</li>
+<li>ASCII names for functions are often different even when the function is essentially the same, as motivated above under [Library Mode].</li>
+<li>Monadic <code>≡</code> is Lua length; dyadic <code>≡</code> is Lua identity.</li>
+<li>No <code>⍷</code>, monadic <code>∊</code> or <code>⌷</code>.</li>
+<li>TODO: Dyadic <code>~</code>.</li>
+<li>TODO: Monadic <code>↑</code>.</li>
+<li>TODO: Dyadic <code>⍒</code> and <code>⍋</code> (will work differently, though).</li>
+</ol>
+<h3 id="upward-incompatibilities">Upward incompatibilities</h3>
+<ol style="list-style-type: decimal">
+<li>Lua⋆APL is a Lua package. All of Lua is available. The implications are not individually listed; they include that scalars can be any Lua value except a table, Lua functions can be used to index an array, arrays can be modified at the Lua level, some string-valued keys are used, etc.</li>
+<li>Lua⋆APL can be extended by Lua functions registered under APL names. This could be used to provided some non-implemented functionality.</li>
+<li>Namespaces.</li>
+<li><code>∇</code> and <code>⎕</code> are ordinary APL functions.</li>
+<li>Lua⋆APL supports strings, not character arrays.</li>
+</ol>
 <hr />
 <h1 id="the-core-c-routines">The core C routines</h1>
-<p>Some of these have been adapted from other packages: for the block functions I acknowledge useful ideas of John Hind, Steve Fisher and Eike Decker. They are delivered in a table returned by <code>require apl_core</code>.</p>
+<p>Some of these have been adapted from other packages: for the block functions and the style of documentation below I acknowledge useful ideas of John Hind. They are delivered in a table returned by <code>require apl_core</code>.</p>
 <p>The table also returns six functions needed for the <code>Circ</code> function (APL <code>○</code>) which are not described here.</p>
 <h2 id="block-functions">Block functions</h2>
 <p>Block functions all have a table and two integers as their first three arguments. The notation <code>tbl[a:b]</code> is used for a block of values with increasing keys if <code>a&lt;b</code> and decreasing keys if <code>a&gt;b</code>. Thus <code>tbl[b:a]</code> is the reverse of <code>tbl[a:b]</code>.</p>
@@ -53,8 +113,8 @@
 <p>If <code>count==1</code>, returns the first index <code>i</code> in <code>a:b</code> such that <code>fct(tbl[i])</code> is true. If <code>count&gt;1</code>, ignores the first <code>count-1</code> hits. If <code>fct</code> is not a function or if <code>count&lt;1,</code> returns nil.</p>
 <hr />
 <h3 id="settblab..."><code>set(tbl,a,b,...)</code></h3>
-<p>Sets <code>tbl[a:b]</code> to the given values, overwriting existing values.</p>
-<p>If the vararg list is empty (not even containing <code>nil</code>), stores nothing. The list is treated cyclically: if it is exhausted before <code>b</code> is reached, the supply of values is resumed from its beginning. If <code>b</code> is nil, values are stored in <code>tbl[a],tbl[a+1],...</code> until the list is exhausted. Returns <code>tbl</code>.</p>
+<p>Sets <code>tbl[a:b]</code> to the given values, overwriting existing values. Returns <code>tbl</code>.</p>
+<p>If the vararg list is empty (not even containing <code>nil</code>), stores nothing. The list is treated cyclically: if it is exhausted before <code>b</code> is reached, the supply of values is resumed from its beginning. If <code>b</code> is nil, values are stored in <code>tbl[a],tbl[a+1],...</code> until the list is exhausted.</p>
 <hr />
 <h3 id="transposetblabtarget"><code>transpose(tbl,a,b,target)</code></h3>
 <p>Stores the transpose of <code>tbl[1:a*b]</code> in <code>target[1:a*b]</code>. <code>tbl</code> is assumed to contain <code>a</code> blocks of <code>b</code> elements, and <code>target</code> will contain <code>b</code> blocks of <code>a</code> elements. Returns <code>target</code>.</p>
@@ -67,6 +127,26 @@
 <p>Merges <code>tbl[low:middle]</code> with <code>tbl[middle+1:high'</code> according to <code>cmp</code> (specified as for the standard <code>table.sort</code>). Both halves are assumed to be already sorted.</p>
 <h2 id="apl-functions">APL functions</h2>
 <p>These functions operate on or return tables that conform to the specifications for APL arrays. See main documentation.</p>
+<h3 id="bothfx1x2e1e2"><code>both(f,x1,x2,e1,e2)</code></h3>
+<pre><code>Applies binary `f` term-by-term to every pair of corresponding 
+elements of `x1` and `x2`, whose sizes must be compatible as
+specified by `e1` and `e2`.
+
+`e1=0; e2=0`
+:   `x1` and `x2` must have the same shape, which is also the
+     shape of the result.
+`e1=1`
+:   `x1` may be a singleton, treated as equivalent to a constant
+    array of the same shape as `x2`.
+`e2=1`
+:   `x2` may be a singleton, treared as equivalent to a constant
+    array of the same shape as `x1`.
+`e1=2`
+:   `x1` is treated as a constant first argument even if it is
+    an array.
+`e2=2`
+:   `x2` is treated as a constant second argument even if it is
+    an array. </code></pre>
 <h3 id="compatab"><code>compat(a,b)</code></h3>
 <p>Tests whether <code>a</code> and <code>b</code> are compatible for term-by-term dyadic functions. That means one of the following conditions holds:</p>
 <ol style="list-style-type: decimal">
@@ -74,42 +154,28 @@
 <li><code>a</code> and <code>b</code> have the same shape.</li>
 <li><code>a</code> or <code>b</code> is a vector, and the other is a one-row or a one-column matrix of the same length.</li>
 </ol>
-<dl>
-<dt><code>each(f,x)</code></dt>
-<dd><p>Applies unary <code>f</code> term-by-term to every element of <code>x</code>, producing a result of the same shape as <code>x</code>.</p>
-</dd>
-<dt><code>both(f,x1,x2,e1,e2)</code></dt>
-<dd><p>Applies binary <code>f</code> term-by-term to every pair of corresponding elements of <code>x1</code> and <code>x2</code>, whose sizes must be compatible as specified by <code>e1</code> and <code>e2</code>.</p>
-<dl>
-<dt><code>e1=0; e2=0</code></dt>
-<dd><code>x1</code> and <code>x2</code> must have the same shape, which is also the shape of the result.
-</dd>
-<dt><code>e1=1</code></dt>
-<dd><code>x1</code> may be a singleton, treated as equivalent to a constant array of the same shape as <code>x2</code>.
-</dd>
-<dt><code>e2=1</code></dt>
-<dd><code>x2</code> may be a singleton, treared as equivalent to a constant array of the same shape as <code>x1</code>.
-</dd>
-<dt><code>e1=2</code></dt>
-<dd><code>x1</code> is treated as a constant first argument even if it is an array.
-</dd>
-<dt><code>e2=2</code></dt>
-<dd><code>x2</code> is treated as a constant second argument even if it is an array.
-</dd>
-</dl>
-</dd>
-</dl>
+<hr />
+<h3 id="eachfx"><code>each(f,x)</code></h3>
+<p>Applies unary <code>f</code> term-by-term to every element of <code>x</code>, producing a result of the same shape as <code>x</code>.</p>
+<hr />
 <h3 id="iotanstart1"><code>iota(n[,start=1])</code></h3>
 <p>Returns an APL vector containing the first <code>n</code> integers from the given start.</p>
 <h3 id="rhovmn"><code>rho(v,m[,n])</code></h3>
 <p>Returns an APL vector of length <code>m</code>, or an APL matrix of shape <code>m×n</code>, filled with copies of <code>v</code>.</p>
+<h3 id="svda"><code>svd(A)</code></h3>
+<p>Calls the LAPACK routine <code>dgesvd</code> and organizes its output into a Lua table containing three APL arrays <code>U</code>, <code>S</code>, <code>V</code>. See User's Manual.</p>
 <h2 id="other-functions">Other functions</h2>
+<h3 id="is_intx"><code>is_int(x)</code></h3>
+<p>Tests whether <code>x</code> equals <code>tointeger(x)</code>.</p>
 <h3 id="keepcount..."><code>keep(count,...)</code></h3>
 <p>Returns <code>count</code> arguments, starting at the first extra argument. As in the case of <code>select</code>, a negative number indexes from the end (-1 is the last argument).</p>
 <hr />
 <h3 id="mapft..."><code>map(ft,...)</code></h3>
 <p>Each return value is the result of <code>ft</code> applied to the corresponding value in the tuple.</p>
 <p>&quot;Applying&quot; means indexing if <code>ft</code> is a table and calling if <code>ft</code> is a function, which is assumed to be unary with one return value.</p>
+<hr />
+<h3 id="tointegerx"><code>tointeger(x)</code></h3>
+<p>The result of the API function <code>lua_tointeger</code>.</p>
 <hr />
 <h3 id="wherelevel"><code>where(level)</code></h3>
 <p>Returns a string identifying the point in the source code from which <code>where</code> is being called if <code>level=1</code>, the point from which that routine was called if <code>level=2</code>, etc.</p>

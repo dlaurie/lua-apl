@@ -455,7 +455,7 @@ help(Length, "Length: ≡⍵ → Lua length operator applied to ⍵")
 local Abs, Ceil, Exp, Fact, Floor, Ln, Not, Pi, Range, Recip, Roll, Sign, Unm
 local Add, And, Binom, Circ, Deal, Div, Log, Max, Min, Mod, Mul, Nand, 
    Nor, Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
-local Format, NaN, Pass, Range, Reshape, Same, ToString
+local Get, Format, NaN, Pass, Range, Reshape, Same, Set, ToString
  
 local abs, concat = math.abs, table.concat
 
@@ -509,6 +509,7 @@ Format = function(_w,_a)
    return _a and _a~='raw' and _a:format(_w) or ToString(_w) 
 end
 
+Get=core.index
 Ln = math.log 
 Log = math.log 
 Max = math.max 
@@ -529,6 +530,7 @@ Recip = function(_w) return 1/_w end
 Reshape = core.rho
 Roll = math.random 
 Same = function(_w,_a) return iverson(_a==_w) end
+Set = core.newindex
 Sign = function(_w) return _w<0 and -1 or _w>0 and 1 or 0 end 
 Sub = function(_w,_a) return _a-_w end
 
@@ -582,6 +584,8 @@ end
 
 Unm = function(_w) return -_w end
 
+local lib = {Get=core.index,NaN=NaN,Set=core.newindex}
+
 local f1={Abs=Abs, Ceil=Ceil, Exp=Exp, Fact=Fact, Floor=Floor, Ln=Ln, 
   Not=Not, Pi=Pi, Recip=Recip, Roll=Roll, Sign=Sign, Unm=Unm}
 
@@ -594,13 +598,11 @@ local gen1={Pass=Pass, Range=Range, ToString=ToString}
 
 local gen2={Format=Format, Pass=Pass, Reshape=Reshape, Same=Same}
 
-apl.rank0 = {f1=f1, f2=f2}  -- primitive scalar functions
+apl.rank0 = {f1=f1, f2=f2, lib={}}  -- primitive scalar functions
+apl.lib=lib
 apl.f2,apl.op1,apl.op2 = {},{},{}
 replace(apl.f1,f1); replace(apl.f1,gen1);
 replace(apl.f2,f2); replace(apl.f2,gen2);
-
-arr_meta.__index=core.index
-arr_meta.__newindex=core.newindex
 
 local helptext = {
 [Abs] = "Abs: ∣⍵ → Lua's math.abs(⍵)";
@@ -1008,8 +1010,7 @@ local f2={Attach1=Attach, Attach2=Attach, Compress1=Compress,
 local op1={Each=Each,Reduce1=Reduce,Reduce2=Reduce,Scan1=Scan,Scan2=Scan}
 local op2={Inner=Inner}
 
--- No need to copy help
-apl.lib=lib
+replace(apl.lib,lib,apl.rank0.lib)
 replace(apl.f1,f1,apl.rank0.f1);
 replace(apl.f2,f2,apl.rank0.f2);
 apl.op1=op1;
@@ -1406,9 +1407,6 @@ SVD(A): A table with three entries containing the SVD of an m×n matrix A.
           end -- matrix functions
 
           do  --## Build the compiler tables from the dictionary
-
-print"Already in module table:"
-help(apl)
 
 local f1 = {Abs='∣', Ceil='⌈', Disclose='⊃', Enclose='⊂', Exp='⋆', Define='∇',
   Execute='⍎', Fact='!', Floor='⌊', Length='≡', Ln='⍟', Unm='−', Not='∼',

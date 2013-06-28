@@ -17,15 +17,24 @@
 <p>Read what it says in the README about installation and UTF-8.</p>
 <p>APL is a functional language with extensive array processing abilities, originally designed by Ken Iverson in the 1960's. Lua⋆APL is an extension of Lua that gives access to the power of APL (the APL asterisk <code>⋆</code> means <code>Power</code>) without leaving the comfort and security of Lua.</p>
 <p>There are three modes of usage, which can be thought of as analogous to the C API, scripting language, and standalone executable of Lua.</p>
-<ul>
-<li><pre><code>Reshape(Take(1,Add(1,n)),Attach2(n,n))</code></pre></li>
-<li><pre><code>apl&quot;(n,n)⍴(n+1)↑1&quot;()</code></pre>
-<p>The APL compiler translates this to the string of calls shown above.</p></li>
-<li><pre><code>(n,n)⍴(n+1)↑1</code></pre>
+<dl>
+<dt>Library mode:</dt>
+<dd><p>APL functionality is offered as a Lua library, which makes no use of the APL character set except in its help information. You type in Lua commands like:</p>
+<pre><code>Reshape(Take(1,Add(1,n)),Attach2(n,n))</code></pre>
+</dd>
+<dt>Lua mode:</dt>
+<dd><p>Functions callable from Lua can be written in APL. This is achieved via a function <code>apl</code> rather like Lua's <code>load</code>, which generates intermediate Lua code consisting of chained calls to the APL library. You type in Lua commands like:</p>
+<pre><code>apl&quot;(n,n)⍴(n+1)↑1&quot;()</code></pre>
+<p>The APL compiler translates this to the string of calls shown above.</p>
+</dd>
+<dt>APL mode:</dt>
+<dd><p>Bare APL code can be entered directly at the terminal, mixed with Lua code. You type in APL commands like:</p>
+<pre><code>(n,n)⍴(n+1)↑1</code></pre>
 <p>The APL interpreter decides this must be APL code and modifies it to the Lua mode code shown above. If it seems to be Lua code, the interpreter does not do the translation.</p>
-<p>This works because APL code has such a distinctive appearance. Even a primitive guessing algorithm can identify APl code with a high rate of accuracy. Code deemed to be APL is translated to load and execute as in Lua mode, but the result is printed by default as typical APL systems do. The effect is to give an APL-like look-and-feel. If you already know APL, jump straight to the section on <a href="Bare%20APL%20code%20can%20be%20entered%20directly%20at%20the%20terminal,%20mixed%20with%20Lua%20code.%20You%20type%20in%20APL%20commands%20like:">APL mode</a> and try it out.</p></li>
-</ul>
-<p>The code examples shown here, even the ones in the section on Lua mode, use the three-space prompt of the Lua⋆APL standalone rather than the conventional Lua prompt, but all code except that shown in the section on <a href="Bare%20APL%20code%20can%20be%20entered%20directly%20at%20the%20terminal,%20mixed%20with%20Lua%20code.%20You%20type%20in%20APL%20commands%20like:">APL mode</a> works on a vanilla Lua interpreter too.</p>
+<p>This works because APL code has such a distinctive appearance. Even a primitive guessing algorithm can identify APL code with a high rate of accuracy. Code deemed to be APL is translated to load and execute as in Lua mode, but the result is printed by default as typical APL systems do. The effect is to give an APL-like look-and-feel. If you already know APL, jump straight to the section on <a href="#apl-mode">APL mode</a> and try it out.</p>
+</dd>
+</dl>
+<p>The code examples shown here, even the ones in the section on Lua mode, use the three-space prompt of the Lua⋆APL standalone rather than the conventional Lua prompt, but all code except that shown in the section on <a href="#apl-mode">APL mode</a> works on a vanilla Lua interpreter too.</p>
 <p>In this document, we do not consistently use &quot;APL&quot; and &quot;Lua⋆APL&quot; as denoting different things. &quot;APL&quot; is a fairly vague term, meaning more or less &quot;a typical APL implementation&quot; or even &quot;the APL way of thinking&quot;, whereas &quot;Lua⋆APL&quot; is a specific term for this implementation, which of course also falls under the shadowy APL umbrella.</p>
 <p>Words like &quot;standard&quot; refer to features that are typically found in almost every APL dialect since about 1980, well summarized in the <a href="http://en.wikipedia.org/wiki/APL_syntax_and_symbols">Wikipedia article</a>. &quot;Non-standard&quot; in the case of Lua⋆APL means that I am using an unusual APL symbol without making any attempt even to find out how modern APL implementations use it (the latest APL that I take into account is APL2, and even in that case compatibility across the board is not aimed at). Please contact me if you feel that some other symbol for the same concept, or some other concept for the same symbol, is actually semi-standard by now.</p>
 <p>If you would like to know much more about APL than you currently do, there are several well-organized websites of modern commercial APLs, e.g. <a href="http://www.microapl.com/apl_help">http://www.microapl.com/apl_help</a>.</p>
@@ -35,13 +44,14 @@
 <pre><code>   apl=require&#39;apl&#39;
    apl:import&#39;*&#39;</code></pre>
 <p>That call to <code>apl:import</code> adds the 70-plus items of the module to the global environment. Almost all of them are quite distinctively named, but if you instinctively recoil in horror, muttering &quot;pollution&quot; under your breath, by all means omit that line and prepare to type numerous instances of <code>apl.</code>, or (in a script) replace it by assigning the ones you actually use to local variables. Better, actually: just hold your horses till you get to Lua mode; no large-scale imports necessary there.</p>
-<p>A thorough knowledge of what the library offers is not needed if you already know APL and plan to use mostly APL mode. If you already know APL, by all means skip straight to <a href="Bare%20APL%20code%20can%20be%20entered%20directly%20at%20the%20terminal,%20mixed%20with%20Lua%20code.%20You%20type%20in%20APL%20commands%20like:">APL mode</a> and only read this part later. If you don't want to build the APL interpreter, skip to <a href="Functions%20callable%20from%20Lua%20can%20be%20written%20in%20APL.%20This%20is%20achieved%20via%20a%20function%20`apl`%20rather%20like%20Lua&#39;s%20`load`,%20which%20generates%20intermediate%20Lua%20code%20consisting%20of%20chained%20calls%20to%20the%20APL%20library.%20You%20type%20in%20Lua%20commands%20like:">Lua mode</a>. Actually, I do not expect anybody to stop at library mode, but it is the easiest place to start for Lua programmers who do not know any APL; eventually one needs know about it, if only because some library functions have optional extra parameters that are fixed at default values when called from APL. It is best learnt in an interactive session because an extensive amount of interactive help is available.</p>
+<p>A thorough knowledge of what the library offers is not needed if you already know APL and plan to use mostly APL mode. If you already know APL, by all means skip straight to <a href="#apl-mode">APL mode</a> and only read this part later. If you don't want to build the APL interpreter, skip to <a href="#lua-mode">Lua mode</a>. Actually, I do not expect anybody to stop at library mode, but it is the easiest place to start for Lua programmers who do not know any APL; eventually one needs know about it, if only because some library functions have optional extra parameters that are fixed at default values when called from APL. It is best learnt in an interactive session because an extensive amount of interactive help is available.</p>
 <p>The module <code>apl</code> loads a C module <code>apl_core</code>, documented in the Programmer's Guide.</p>
 <p>The module returns a table with keys named by the following convention:</p>
 <ul>
 <li><code>CamelCase</code>: APL functions (mostly mapped to APL symbols later)</li>
 <li><code>lowercase</code>: Lua functions (not usually called from APL code)</li>
 <li><code>_CAPS</code>: needed by the system or providing information</li>
+<li><code>_lowercase</code>: control variables</li>
 </ul>
 <p>&quot;APL functions&quot; of course does not imply that they are anything else than just Lua functions. It merely means that these are mostly the functions that lie at the heart of APL, closely following the original design of Iverson. There is a simple mapping between Lua postfix notation and APL infix notation, for example:</p>
 <table>
@@ -254,7 +264,7 @@ a vector and padded to the maximum length using zeros or empty strings.
 Rerank: Rerank(_w,_a): array of one rank higher (_a&gt;0) or lower (_a&lt;0),
    stacking rows (±1) or columns (±2). See Disclose/Enclose.</code></pre>
 <h3 id="axis-dependent-functions-and-operators">Axis-dependent functions and operators</h3>
-<p>Several APL vector functions generalize to matrices by operating either on the rows or on the columns. In APL notation, the distinction is made by using different symbols (<code>⊖ ⌿ ⍀ ⍪</code> are the row-wise counterparts to <code>⌽ / \ ,</code>). There are three different functions at issue here.</p>
+<p>Several APL vector functions generalize to matrices by operating either on the rows or on the columns. In APL notation, the distinction is made by using different symbols (<code>⊖ ⌿ ⍀ ⍪</code> are the row-wise counterparts to <code>⌽ / \ ,</code>). There are typically three different functions at issue here.</p>
 <pre><code>   help(Attach)
 Attach(⍵,⍺): ⍺,⍵ → elements of ⍺ followed by elements of ⍵
    help(Attach1)
@@ -267,7 +277,7 @@ Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵
 [3,0;1,2]
    print(Attach2({1,2},{3}))
 [3,1,2]</code></pre>
-<p>As you can see, <code>Attach1</code> pads short rows to the length of the longest list. <code>Attach1</code> pads short columns, but vectors count as one-row matrices.</p>
+<p>As you can see, <code>Attach1</code> pads short rows to the length of the longest list. <code>Attach2</code> pads short columns, but vectors count as one-row matrices.</p>
 <p>In Lua⋆APL, the principle is &quot;act on rows when the axis is 1, act on colums when the axis is 2&quot;, and the implementation is to convert the matrix to a nested array, do something to that nested array, and convert back.</p>
 <p>In the case of <code>Rotate</code>, there is a possibility of confusion here. <code>Rotate1(A,1)</code> must rotate the rows of <code>A</code> up by 1, no question. What does <code>Rotate1(A,{2,1,3,4})</code> do, rotate each row of <code>A</code> individually by the specified amount? If so, <code>Rotate1(A,{1,1,1,1})</code> would rotate every row left by 1, i.e. it would rotate the columns left by 1. That would violate the APL principle that a singleton does the same as a constant vector. So we must violate the Lua⋆APL principle for the sake of the greater cause: <code>Rotate1(A,{2,1,3,4})</code> rotates each <em>column</em> of <code>A</code> individually by the specified amount.</p>
 <pre><code>   A=Copy{1,2,3,4;5,6,7,8;9,10,11,12;rows=3,cols=4}; print(A)
@@ -367,7 +377,7 @@ Contents: argcheck arr both checksize checktype compat each filler get
 <ol style="list-style-type: decimal">
 <li><p>APL source is split into independent chunks by the <code>⋄</code> (diamond) separator, each of which is compiled on its own. This implies that you are not allowed to use the diamond inside an APL string. You are also not allowed to use the single-quote inside. If you really need those two characters inside a string, create it using Lua and refer to it inside APL by its global name.</p></li>
 <li><p>An APL chunk is lexed, parsed and translated to Lua code in one step by a single LPeg grammar. I thank Roberto Ierusalimschy from the bottom of my heart for this absolutely ideal tool.</p></li>
-<li><p>The result of the previous step is a chunk of Lua code, which looks exactly like what you would code in Lua mode, and a number identifying the position in the APL code at which the compiler could not continue. If that is before the end of the string, the compilation failed, and the APL code is displayed with an arrow pointing to that position and an error message. This is maybe only slightly more helpful than saying there is an error somewhere, but at least it gives a starting point.</p>
+<li><p>The result of the previous step is a chunk of Lua code, which looks almost exactly like what you would code in library mode, and a number identifying the position in the APL code at which the compiler could not continue. If that is before the end of the string, the compilation failed, and the APL code is displayed with an arrow pointing to that position and an error message. This is maybe only slightly more helpful than saying there is an error somewhere, but at least it gives a starting point.</p>
 <pre><code>   ⍺∘.×(⍺←⍳5)
 ./apl-compiler.lua:116: APL syntax error
 ⍺∘.×(⍺←⍳5)
@@ -425,16 +435,12 @@ _a=Mul(Range(Floor(Div(_a,Shape(_w)))),_a); _w[_a]=0; return _w </code></pre>
 <p>Operators are even more complicated. In principle there are numerous possibilities for the valence of an operator, its arguments and its result. The original APL operators solve the difficulty by taking only the valence of the operator into account, in effect treating the arguments and result as ambivalent.</p>
 <dl>
 <dt>Monadic operators</dt>
-<dd>A monadic operator acts on a function (which is the left argument
+<dd><p>A monadic operator acts on a function (which is the left argument of the operator) to form another function.</p>
 </dd>
-</dl>
-<p>of the operator) to form another function.</p>
-<dl>
 <dt>Dyadic operators</dt>
-<dd>A dyadic operator acts on a pair of functions to form a single
+<dd><p>A dyadic operator acts on a pair of functions to form a single function.</p>
 </dd>
 </dl>
-<p>function.</p>
 <p>Other implementations are not always as catholic as the above suggests; some APLs do not allow operators to act on user-defined functions.</p>
 <p>Lua*APL, on the other hand, is very permissive. A monadic operator is simply one that acts on one function, a dyadic operator is one that acts on two functions. The resulting function could be either case be monadic or dyadic; we'll know when it is used. In cases where the same name could denote either a monadic or a dyadic function, the dyadic function takes precedence.</p>
 <p>Lua⋆APL goes even further: it accepts functions created by operators as arguments to another operator. In such cases, parentheses must be used.</p>
@@ -564,11 +570,11 @@ expr = &#39;∇&#39;*func_expr
   + leftarg*dyadic_func*expr 
   + monadic_func*expr
   + leftarg;
-dyadic_func = amphiadic_func + Dyadic_function;
-monadic_func = amphiadic_func + Monadic_function;
+dyadic_func = ambivalent + Dyadic_function;
+monadic_func = ambivalent + Monadic_function;
 func_expr = &#39;(&#39;*(dyadic_func+Monadic_function)*&#39;)&#39;
   + Dyadic_function + Monadic_function;
-amphiadic_func = func_expr*Monadic_operator
+ambivalent = func_expr*Monadic_operator
    + func_expr*Dyadic_operator*func_expr;
 leftarg = value + &#39;(&#39;*expr*&#39;)&#39;;
 value = Vector + String +
@@ -661,31 +667,5 @@ Rotate2(⍵,⍺): ⍺⌽⍵ → elements in rows of ⍵ rotated left by ⍺ or r
 <p>The comments in <code>lua-apl.c</code> (search for &quot;guess&quot;) include tips on how to override a wrong guess.</p></li>
 <li><p>If you replay input history (assuming your Lua has that feature) you will notice that your input has been changed to what you would have typed in Lua mode, e.g. <code>2 3⌽A</code> turns into <code>return apl&quot;2 3⌽A&quot;()</code>.</p></li>
 </ul>
-<h2 id="comparison-with-apl2">Comparison with APL2</h2>
-<p>Though not an official standard, IBM's APL2 was a landmark and is well documented (google for <code>APL2LanguageRef.pdf</code>). Lua⋆APL is not and will not be an implementation of the same APL dialect as APL2, but in cases where Lua⋆APL extends older APL usage in the same way as APL2 does, I have tried to use the same symbol for the extension.</p>
-<p>Differences of which I am aware between features provided by APL2 and Lua⋆APL are listed below. Unless marked &quot;TODO&quot;, there are no plans to resolve those differences. I would like, though, to be told of any differences not listed or implied below.</p>
-<h3 id="downward-incompatibilities">Downward incompatibilities</h3>
-<ol style="list-style-type: decimal">
-<li>Complex numbers are not supported. Implications include that monadic <code>+</code> means <code>Copy</code>, not <code>Conjugate</code>, monadic <code>×</code> means <code>Sign</code>, not <code>Direction</code>, etc.</li>
-<li>Arrays of rank higher than 2 are not supported. Implications include that is no dyadic <code>⍉</code>, etc, and that separate functions and operators are provided for working along the first axis.</li>
-<li>Nested arrays are provided via Lua tables, respecting Lua's natural row-wise order. Implications include that monadic <code>⊂</code> or <code>⊃</code> respectively enclose or disclose rows (and if ever extended, will do one rank at a time), and there is no dyadic <code>⊂</code> or <code>⊃</code>, etc.</li>
-<li>System variables have different names and do different things.</li>
-<li>Index origin 1, not selectable.</li>
-<li><code>≠</code>, <code>&lt;</code>, <code>&gt;</code> do not depend on comparison tolerance.</li>
-<li>ASCII names for functions are often different even when the function is essentially the same, as motivated above under <a href="APL%20functionality%20is%20offered%20as%20a%20Lua%20library,%20which%20makes%20no%20use%20of%20the%20APL%20character%20set%20except%20in%20its%20help%20information.%20You%20type%20in%20Lua%20commands%20like:">Library Mode</a>.</li>
-<li>Monadic <code>≡</code> is Lua length; dyadic <code>≡</code> is Lua identity.</li>
-<li>No <code>⍷</code>, monadic <code>∊</code> or <code>⌷</code>.</li>
-<li>TODO: Dyadic <code>~</code>.</li>
-<li>TODO: Monadic <code>↑</code>.</li>
-<li>TODO: Dyadic <code>⍒</code> and <code>⍋</code> (will work differently, though).</li>
-</ol>
-<h3 id="upward-incompatibilities">Upward incompatibilities</h3>
-<ol style="list-style-type: decimal">
-<li>Lua⋆APL is a Lua package. All of Lua is available. The implications are not individually listed; they include that scalars can be any Lua value except a table, Lua functions can be used to index an array, arrays can be modified at the Lua level, some string-valued keys are used, etc.</li>
-<li>Lua⋆APL can be extended by Lua functions registered under APL names. This could be used to provided some non-implemented functionality.</li>
-<li>Namespaces.</li>
-<li><code>∇</code> and <code>⎕</code> are ordinary APL functions.</li>
-<li>Lua⋆APL supports strings, not character arrays.</li>
-</ol>
 </body>
 </html>

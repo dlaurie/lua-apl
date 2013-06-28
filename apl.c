@@ -172,95 +172,6 @@ static int lua_where (lua_State *L) {
   return 1;
 }
 
-/* ------------- Sort package ------------------------ */
-
-#define tbl 1
-#define low 2
-#define middle 3
-#define high 4
-#define cmp 5
-#define wrk 6
-#define ai 7
-#define precedes(i,j) (lua_isnoneornil(L,cmp)? lua_compare(L,i,j,LUA_OPLT): \
-    (lua_pushvalue(L,cmp), lua_pushvalue(L,i), lua_pushvalue(L,j), \
-    lua_call(L,2,1), test=lua_toboolean(L,-1), lua_pop(L,1), test))
-/* merge(tbl,low,middle,high,cmp) */
-static int block_merge(lua_State *L) {
-  int lo=luaL_checkint(L,low), mid=luaL_checkint(L,middle), 
-    hi=luaL_checkint(L,high), i, j, k, test;  
-  if (hi<=mid || mid<=lo) return 0;
-  luaL_checktype(L,tbl,LUA_TTABLE); 
-  if (!lua_isnoneornil(L,cmp)) {
-    luaL_checktype(L,cmp,LUA_TFUNCTION);
-#ifdef CHECK_COMPARISON_FUNCTION
-    lua_settop(L,ai-1);
-    lua_rawgeti(L,tbl,lo);
-    luaL_argcheck(L,!precedes(ai,ai),cmp,"invalid order function for sorting");
-#endif
-  }
-  lua_settop(L,wrk-1);
-  lua_createtable(L,mid-lo+1,0);
-  for (i=1,j=lo;j<=mid;i++,j++) { lua_rawgeti(L,tbl,j); lua_rawseti(L,wrk,i); }  
-  lua_rawgeti(L,tbl,j); lua_rawgeti(L,wrk,1); 
-  for (i=1,k=lo; k<j && j<=hi; k++)
-    if (precedes(ai,ai+1)) {
-      lua_insert(L,ai); 
-      lua_rawseti(L,tbl,k); 
-      lua_rawgeti(L,tbl,++j);
-      lua_insert(L,ai);
-    } else { 
-      lua_rawseti(L,tbl,k); 
-      lua_rawgeti(L,wrk,++i); 
-    }    
-  for (;k<j;k++,i++) { lua_rawgeti(L,wrk,i); lua_rawseti(L,tbl,k); }
-}
-    
-/* sort(tbl,l,r,cmp) */
-#undef cmp
-#undef precedes
-#define cmp 4
-#define v 5
-#define aj 6
-#define precedes(i,j) (lua_isnoneornil(L,cmp)? lua_compare(L,i,j,LUA_OPLT): \
-    (lua_pushvalue(L,cmp), lua_pushvalue(L,i), lua_pushvalue(L,j), \
-    lua_call(L,2,1), test=lua_toboolean(L,-1), lua_pop(L,1), test))
-static int block_sort(lua_State *L) {
-  int first=luaL_checkint(L,2), last=luaL_checkint(L,3), i, j, k, test;  
-  if (last<=first) return 0;
-  luaL_checktype(L,tbl,LUA_TTABLE); 
-  if (!lua_isnoneornil(L,cmp)) {
-    luaL_checktype(L,cmp,LUA_TFUNCTION);
-#ifdef CHECK_COMPARISON_FUNCTION
-    lua_settop(L,v-1);
-    lua_rawgeti(L,tbl,first);
-    luaL_argcheck(L,!precedes(v,v),cmp,"invalid order function for sorting");
-#endif
-  }
-/* insert sort */
-  lua_settop(L,v-1);
-  for(i=first+1;i<=last;i++) {
-    k=first;
-    lua_rawgeti(L,tbl,i);
-    for (j=i;j>first;j--) {
-      lua_rawgeti(L,tbl,j-1);
-      if (precedes(v,aj)) { lua_rawseti(L,tbl,j); }
-      else { lua_settop(L,v); k=j; break; }
-    }
-    lua_rawseti(L,tbl,k); 
-  }
-  return 0;
-}
-#undef tbl
-#undef low
-#undef middle
-#undef high
-#undef cmp
-#undef wrk
-#undef ai
-#undef v
-#undef aj
-#undef precedes
-
 /* ------------------ Circle package ----------------------- */
 
 /* Numerically stable versions of the inverse hyperbolics due to 
@@ -651,8 +562,6 @@ static const luaL_Reg funcs[] = {
   {"map", tuple_map},
   {"keep", tuple_keep},
   {"where", lua_where},
-  {"sort", block_sort},
-  {"merge", block_merge},
   {"is_int", core_is_int},
   {"rho", apl_rho},
   {"iota", apl_iota},
@@ -676,16 +585,9 @@ static const luaL_Reg apl_meta[] = {
   {NULL, NULL}
 };
  
-static const luaL_Reg arr_meta[] = {
-  {"__index", arr_index},
-  {NULL, NULL}
-};
-
 LUAMOD_API int luaopen_apl_core (lua_State *L) {
   luaL_newlib(L, apl_meta);
   lua_setfield(L,LUA_REGISTRYINDEX,"apl_meta");
-  luaL_newlib(L, arr_meta);
-  lua_setfield(L,LUA_REGISTRYINDEX,"arr_meta");
   luaL_newlib(L, funcs);
   return 1;
 }

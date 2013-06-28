@@ -18,9 +18,9 @@
 <p>APL is a functional language with extensive array processing abilities, originally designed by Ken Iverson in the 1960's. Lua⋆APL is an extension of Lua that gives access to the power of APL (the APL asterisk <code>⋆</code> means <code>Power</code>) without leaving the comfort and security of Lua.</p>
 <p>There are three modes of usage, which can be thought of as analogous to the C API, scripting language, and standalone executable of Lua.</p>
 <ul>
-<li><pre><code>Reshape(Take(1,Add(1,_w)),Attach2(_w,_w))</code></pre></li>
+<li><pre><code>Reshape(Take(1,Add(1,n)),Attach2(n,n))</code></pre></li>
 <li><pre><code>apl&quot;(n,n)⍴(n+1)↑1&quot;()</code></pre>
-<p>The APL compiler translates this to that string of calls shown above.</p></li>
+<p>The APL compiler translates this to the string of calls shown above.</p></li>
 <li><pre><code>(n,n)⍴(n+1)↑1</code></pre>
 <p>The APL interpreter decides this must be APL code and modifies it to the Lua mode code shown above. If it seems to be Lua code, the interpreter does not do the translation.</p>
 <p>This works because APL code has such a distinctive appearance. Even a primitive guessing algorithm can identify APl code with a high rate of accuracy. Code deemed to be APL is translated to load and execute as in Lua mode, but the result is printed by default as typical APL systems do. The effect is to give an APL-like look-and-feel. If you already know APL, jump straight to the section on <a href="Bare%20APL%20code%20can%20be%20entered%20directly%20at%20the%20terminal,%20mixed%20with%20Lua%20code.%20You%20type%20in%20APL%20commands%20like:">APL mode</a> and try it out.</p></li>
@@ -115,7 +115,7 @@
 </tr>
 </tbody>
 </table>
-<p>In total, over 70 of these functions are provided in Lua mode. The APL symbols used for them, even those which in Lua denote arithmetic operators, must be thought of as names, not as as special characters, even though those names are not used in library mode.</p>
+<p>In total, over 70 of these functions are provided in library mode. The APL symbols used for them, even those which in Lua denote arithmetic operators, must be thought of as names, not as as special characters, even though those names are not used in library mode.</p>
 <p>One and the same APL name often does duty for two Lua names. This is possible because APL infix syntax allows the compiler to distinguish between monadic and dyadic functions (see <a href="#valence">Valence</a>) and select the appropriate function. That distinction is possible in Lua too, but only at run time, when one can test whether the second argument of a function is present and not nil.</p>
 <p>APL syntax makes the distinction already at compile time, so that overloading of the Lua names of the functions is not necessary. Instead, the names have been chosen to be descriptive of what the functions do.</p>
 <p>Certain semi-standard descriptive names are often used in APL documentation, such as <a href="http://en.wikipedia.org/wiki/APL_syntax_and_symbols">http://en.wikipedia.org/wiki/APL_syntax_and_symbols</a>. These have been retained in some cases (<code>Ravel</code>, <code>Reshape</code> etc), abbreviated in others (<code>Exp</code> rather than <code>Exponential</code> etc), and occasionally replaced by totally different names (<code>Pow</code> rather than <code>Exponentiation</code>). Functions corresponding to Lua arithmetic metamethods have been given basically the same name (<code>Unm</code> for unary minus, etc.) but there's no rule, really; I've done what feels programmer-friendly to me.</p>
@@ -150,8 +150,8 @@
 <li>In almost all cases, the APL library will accept a Lua table as a substitute for an APL vector.</li>
 <li>All tables returned by the library are APL arrays. In particular, the function <code>Copy</code> will convert a Lua to an APL array.</li>
 </ul>
-<p>For example, to define a matrix (see <a href="#formatting">Formatting</a> for <code>_format</code>):</p>
-<pre><code>   apl._format = &#39;raw&#39;          
+<p>For example, to define a matrix (see <a href="#formatting">Formatting</a> for <code>_format</code>) one calls <code>Reshape</code> with a Lua table and the desired shape as arguments; to convert it to an APL vector one calls <code>Ravel</code>.</p>
+<pre><code>   apl._format = &#39;raw&#39;     
    A = Reshape({11,12,13,21,22,23},{2,3})   
    print(A)
 [11,12,13;21,22,23]
@@ -190,7 +190,7 @@
 <h2 id="array-operations">Array operations</h2>
 <p>The whole point of using APL is so that one never (well, hardly ever) needs to use an explicit table index. The vast majority of its functions accept array arguments and return array values.</p>
 <p>The APL library handles nil arguments gracefully in the case of all scalar functions (i.e. functions that apply term-by-term to array arguments).</p>
-<pre><code>   x=Copy{1,2,nil,4}; y=Rev(x)
+<pre><code>   x=Copy{1,2,nil,4}; y=Reverse(x)
    print(Add(x,y))
 {5,_,_,5}</code></pre>
 <p>The actual storage of a very sparse vector will be compact, using mostly the hash part of a Lua table, but there is no true optimized support for sparse vectors. The functions simply iterate over the known length of the array and skip nils.</p>
@@ -226,7 +226,9 @@ table: 0x93e4e90
 true</code></pre>
 <p>That <code>true</code> says that <code>A[1]</code> and <code>B[1]</code> are actually one and the same table: the elements are still the original Lua tables. This is not quite what is usually wanted from a routine called <code>Copy</code>. The operator <code>Each</code> applies a function term-by-term to every element of a table and returns a new array with the same shape as the original.</p>
 <pre><code>   C=Each(Copy)(A); print(C)
-((1,2),(3,4),(5,6))</code></pre>
+((1,2),(3,4),(5,6))
+   print(A[1]==C[1])
+false</code></pre>
 <p>The elements are now newly minted APL arrays, as is the containing array.</p>
 <p><code>Each</code> works equally well for monadic and for dyadic functions. The APL compiler can tell the difference.</p>
 <pre><code>   print(Each(Reshape)({{1,2,3,4},{5,6,7,8}},{{2,2}}))
@@ -234,7 +236,13 @@ true</code></pre>
 <p>In this example, the two arguments are both nested arrays, so they look to APL like a two-element and a one-element array. A dyadic function created by <code>Each</code> expects two arrays of compatible shape for term-by-term operations, but will accept a one-element argument to act as a constant value. You can override that permission by supplying extra parameters to <code>Each</code> (this feature is only available when calling <code>Each</code> from Lua; the APL operator <code>¨</code> does not allow the possibility.).</p>
 <pre><code>   print(Each(Add)({{1,2,3,4},{5,6,7,8}},{1}))
 (2,3,4,5) (6,7,8,9)
-   print(Each(Add,true,false)({{1,2,3,4},{5,6,7,8}},{1}))
+   help(Each)
+Each(f): f¨ → make a term-by-term function from f
+Each(f,x_w,x_a): (no APL equivalent) Fine-tune constant arguments.
+   x_w=x_a=0: the shapes of _w and _a must be compatible.
+   x_w=1, x_a=1: _w,_a may be a singleton, which will be used every time.
+   x_w=2, x_a=2: _w,_a is used as such every time even if it is a table.
+   print(Each(Add,1,0)({{1,2,3,4},{5,6,7,8}},{1}))
 ./apl-lib.lua:497: bad argument #3 to &#39;both&#39; (shapes are incompatible)</code></pre>
 <p>A vector of vectors of the same length can be combined into a matrix, and a matrix can be converted to a nested array. These operations are so commonly needed that the APL2 notations <code>⊂</code> (Enclose) and <code>⊃</code> (Disclose) have been borrowed (but not with the exact same meaning), and the non-standard APL function <code>Rerank</code> has have been invented as an umbrella for them in library mode.</p>
 <pre><code>   help&quot;⊂&quot;
@@ -246,32 +254,47 @@ a vector and padded to the maximum length using zeros or empty strings.
 Rerank: Rerank(_w,_a): array of one rank higher (_a&gt;0) or lower (_a&lt;0),
    stacking rows (±1) or columns (±2). See Disclose/Enclose.</code></pre>
 <h3 id="axis-dependent-functions-and-operators">Axis-dependent functions and operators</h3>
-<p>Several APL vector functions generalize to matrices by operating either on the rows or on the columns. In APL notation, the distinction is made by using different symbols (<code>⊖ ⌿ ⍀ ⍪</code> are the row-wise counterparts to <code>⌽ / \ ,</code>). In library mode, there is no need to avoid an extra axis argument, and so there is only one function name.</p>
+<p>Several APL vector functions generalize to matrices by operating either on the rows or on the columns. In APL notation, the distinction is made by using different symbols (<code>⊖ ⌿ ⍀ ⍪</code> are the row-wise counterparts to <code>⌽ / \ ,</code>). There are three different functions at issue here.</p>
 <pre><code>   help(Attach)
 Attach(⍵,⍺): ⍺,⍵ → elements of ⍺ followed by elements of ⍵
-Attach(⍵,⍺,1): ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
-Attach(⍵,⍺,2): ⍺,⍵ → columns of ⍺ followed by rows of ⍵
-  In the matrix cases, vectors are treated as one-row matrices.
+   help(Attach1)
+Attach1(⍵,⍺): ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
+   help(Attach2)
+Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵
    print(Attach({1,2},{3}))
 (3,1,2)
-   print(Attach({1,2},{3},1))
+   print(Attach1({1,2},{3}))
 [3,0;1,2]
-   print(Attach({1,2},{3},2))
+   print(Attach2({1,2},{3}))
 [3,1,2]</code></pre>
-<p>As you can see, Lua⋆APL's <code>Attach</code> pads short rows or columns to the length of the longest list.</p>
+<p>As you can see, <code>Attach1</code> pads short rows to the length of the longest list. <code>Attach1</code> pads short columns, but vectors count as one-row matrices.</p>
 <p>In Lua⋆APL, the principle is &quot;act on rows when the axis is 1, act on colums when the axis is 2&quot;, and the implementation is to convert the matrix to a nested array, do something to that nested array, and convert back.</p>
-<p>In the case of <code>Rotate</code>, there is a possibility of confusion here. <code>Rotate(A,1,1)</code> must rotate the rows of <code>A</code> up by 1, no question. What does <code>Rotate(A,{2,1,3,4},1)</code> do, rotate each row of <code>A</code> individually by the specified amount? If so, <code>Rotate(A,{1,1,1,1},1)</code> would rotate every row left by 1, i.e. it would rotate the columns left by 1. That would violate the APL principle that a singleton does the same as a constant vector. So we must violate the Lua⋆APL principle for the sake of the greater cause: <code>Rotate(A,{2,1,3,4},1)</code> rotates each <em>column</em> of <code>A</code> individually by the specified amount.</p>
-<p>For later use by the APL compiler, specialized versions of these functions have been made with the axis argument fixed. These are available in library mode with a little extra trouble, but not in Lua or APL mode. That's why the prompts are the usual Lua prompts.</p>
-<pre><code>&gt; print(apl._F.Attach1({1,2},{3}))
-[3,0;1,2]
-&gt; print(apl._F.Attach2({1,2},{3}))
-[3,1,2]</code></pre>
+<p>In the case of <code>Rotate</code>, there is a possibility of confusion here. <code>Rotate1(A,1)</code> must rotate the rows of <code>A</code> up by 1, no question. What does <code>Rotate1(A,{2,1,3,4})</code> do, rotate each row of <code>A</code> individually by the specified amount? If so, <code>Rotate1(A,{1,1,1,1})</code> would rotate every row left by 1, i.e. it would rotate the columns left by 1. That would violate the APL principle that a singleton does the same as a constant vector. So we must violate the Lua⋆APL principle for the sake of the greater cause: <code>Rotate1(A,{2,1,3,4})</code> rotates each <em>column</em> of <code>A</code> individually by the specified amount.</p>
+<pre><code>   A=Copy{1,2,3,4;5,6,7,8;9,10,11,12;rows=3,cols=4}; print(A)
+ 1  2  3  4
+ 5  6  7  8
+ 9 10 11 12
+   print(Rotate1(A,{2,1,3,4}))
+ 9  6  3  8
+ 1 10  7 12
+ 5  2 11  4
+   </code></pre>
 <h3 id="high-level-matrix-functions">High-level matrix functions</h3>
-<p>The APL functions <code>MatDiv</code> and <code>MatInv</code> are calculated with the aid of the so-called &quot;economy-size&quot; singular value decomposition of a matrix. This represents the matrix as</p>
-<pre><code>A = Inner(Add,Mul)(Each(Outer(Mul))(V,U),S)</code></pre>
-<p>where <code>S</code> contains the singular values, and <code>U</code> and <code>V</code> the left and right singular vectors, of <code>A</code>. Or <code>S+.×U(∘.×)¨V</code> in APL notation.</p>
-<p>In library mode, the function <code>SVD</code> has been provided for the convenience of those who have use for these intermediate quantities. Its return value is a Lua table with the fields <code>S</code>, <code>U</code> and <code>V</code>. Each of these tables is a userdata with an <code>apl</code> method which returns an APL vector of length <code>m</code>, where <code>m</code> is the numerical rank of <code>A</code>. That is to say, <code>U:apl()</code> and <code>V:apl()</code> are nested arrays.</p>
-<p>The numerical rank depends on the comparison tolerances (see <a href="#global-control-variables">Global control variables</a>). Specifically, the elements of <code>s=S:apl()</code> are positive numbers in nonincreasing order; if <code>_act</code> is nonzero, elements less than <code>_act</code> count as zero; if <code>_rct</code> is nonzero, elements less that <code>_rct*s[1]</code> count as zero.</p>
+<p>In the case where <code>A</code> is a non-singular square matrix, <code>MatDiv(A,b)</code> returns the unique solution of a system of linear equations and <code>MatInv(A)</code> to the matrix inverse.</p>
+<p>For a singular or non-square matrix, the numerical rank is determined. <code>MatDiv(A,b)</code> returns the minimum-norm least-squares solution, and <code>MatInv(A)</code> the pseudo-inverse, for that rank.</p>
+<p>The determination of rank depends on non-negative numbers known as the singular values of <code>A</code> (see any text on matrix computations) and on the comparison tolerances (see <a href="#global-control-variables">Global control variables</a>). Specifically, if <code>_act</code> is nonzero, singular values less than <code>_act</code> count as zero; if <code>_rct</code> is nonzero, singular values less than <code>_rct*s[1]</code> count as zero. The rank equals the number of nonzero singular values.</p>
+<p>In library mode, the function <code>SVD</code> has been provided for the convenience of those who know the theory. Its return value is a Lua table containing a vector <code>S</code> of singular values and nested arrays <code>U</code> and <code>V</code> of left and right singular vectors respectively. At this point library mode becomes just too inconvenient, so we resort to Lua mode.</p>
+<pre><code>   A=Reshape(Range(12),{3,4}); print(A)
+ 1  2  3  4
+ 5  6  7  8
+ 9 10 11 12
+   U=USV.U; V=USV.V; S=USV.S; print(S)
+25.43684 1.722612 2.681529e¯16
+   B=apl&quot;+/S×¨U(∘.×)¨V&quot;(); print(B)
+ 1  2  3  4
+ 5  6  7  8
+ 9 10 11 12
+   </code></pre>
 <h2 id="strings">Strings</h2>
 <p>Lua⋆APL does not have character arrays, any more than Lua itself has them. A string is a scalar. If you need to operate on individual bytes of a string, the Lua function <code>string.byte</code> combines well with the library.</p>
 <pre><code>   tobytes = function(s) return {s:byte(1,-1)} end
@@ -280,7 +303,7 @@ Attach(⍵,⍺,2): ⍺,⍵ → columns of ⍺ followed by rows of ⍵
 ({84,104,101},{113,117,105,99,107},{98,114,111,119,110},{102,111,120})
    print(Each(frombytes)(M))
 (&#39;The&#39;,&#39;quick&#39;,&#39;brown&#39;,&#39;fox&#39;)</code></pre>
-<p>The <code>apl.util</code> library has some support for UTF-8.</p>
+<p>The <code>apl.util</code> library has some support for UTF-8. See <a href="#list-of-luaapl-functions">List of Lua⋆APL functions</a>.</p>
 <h2 id="global-control-variables">Global control variables</h2>
 <p>APL traditionally makes use of some control variables that affect its overall behaviour. Which these are, differs from one APL implementation to the next, so they are sometimes called &quot;system variables&quot;. In Lua⋆APL, their names start with an underscore, and they are stored in the module table.</p>
 <table>
@@ -319,14 +342,14 @@ false
 <p>The current version may give a slightly different result, so do the following yourself. For most of these, you can get interactive help.</p>
 <pre><code>   help(apl)
 Contents: Abs Add And Assign Attach Attach1 Attach2 Binom Ceil Circ
-Compress Compress1 Compress2 Copy Deal Decode Define Disclose Div Down
-Drop Each Enclose Encode Execute Exp Expand Expand1 Expand2 Fact Find
-Floor Format Has Inner Length Ln Log MatDiv MatInv Max Min Mod Mul Nand
-Nor Not Or Outer Output Pass Pi Pow Range Ravel Recip Reduce Reduce1
-Reduce2 Rerank Reshape Reverse Reverse1 Reverse2 Roll Rotate Rotate1
-Rotate2 SVD Same Scan Scan1 Scan2 Shape Sign Sub Take TestEq TestGE
-TestGT TestLE TestLT TestNE ToString Transpose Unm Up _act _rct help
-import lua register util    
+    Compress Compress1 Compress2 Copy Deal Decode Define Disclose Div Down
+    Drop Each Enclose Encode Execute Exp Expand Expand1 Expand2 Fact Find
+    Floor Format Get Has Inner Length Ln Log MatDiv MatInv Max Min Mod Mul
+    Nand Nor Not Or Outer Output Pass Pi Pow Range Ravel Recip Reduce
+    Reduce1 Reduce2 Rerank Reshape Reverse Reverse1 Reverse2 Roll Rotate
+    Rotate1 Rotate2 SVD Same Scan Scan1 Scan2 Set Shape Sign Sub Take TestEq
+    TestGE TestGT TestLE TestLT TestNE ToString Transpose Unm Up _act _rct
+    help import lua register util  
    help(Transpose)
 Transpose: ⍉⍵ → matrix transpose of ⍵</code></pre>
 <p><code>apl.util</code> contains utility functions. They are lightly documented by <code>help</code>, even if the help is merely the Lua code.</p>

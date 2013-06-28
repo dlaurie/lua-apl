@@ -21,7 +21,7 @@ the C API, scripting language, and standalone executable of Lua.
     makes no use of the APL character set except in its help 
     information. You type in Lua commands like:
 
-        Reshape(Take(1,Add(1,_w)),Attach2(_w,_w))
+        Reshape(Take(1,Add(1,n)),Attach2(n,n))
 
 -   [Lua mode]: Functions callable from Lua can be written in APL. This is
     achieved via a function `apl` rather like Lua's `load`, which 
@@ -30,7 +30,7 @@ the C API, scripting language, and standalone executable of Lua.
 
         apl"(n,n)⍴(n+1)↑1"()
 
-    The APL compiler translates this to that string of calls shown
+    The APL compiler translates this to the string of calls shown
     above.
 
 -   [APL mode]: Bare APL code can be entered directly at the terminal,
@@ -137,8 +137,8 @@ notation and APL infix notation, for example:
    `Div(_w,_a)`           `⍺÷⍵`
  ------------------- -- -----------------
 
-In total, over 70 of these functions are provided in Lua mode. The APL
-symbols used for them, even those which in Lua denote arithmetic 
+In total, over 70 of these functions are provided in library mode. The 
+APL symbols used for them, even those which in Lua denote arithmetic 
 operators, must be thought of as names, not as as special characters,
 even though those names are not used in library mode. 
 
@@ -234,9 +234,11 @@ not recommended, and never necessary, for two reasons:
 -   All tables returned by the library are APL arrays. In particular,
     the function `Copy` will convert a Lua  to an APL array.
 
-For example, to define a matrix (see [Formatting] for `_format`):
+For example, to define a matrix (see [Formatting] for `_format`)
+one calls `Reshape` with a Lua table and the desired shape as
+arguments; to convert it to an APL vector one calls `Ravel`.
 
-       apl._format = 'raw'          
+       apl._format = 'raw'     
        A = Reshape({11,12,13,21,22,23},{2,3})   
        print(A)
     [11,12,13;21,22,23]
@@ -307,7 +309,7 @@ The APL library handles nil arguments gracefully in the case of all
 scalar functions (i.e. functions that apply term-by-term to array
 arguments).
 
-       x=Copy{1,2,nil,4}; y=Rev(x)
+       x=Copy{1,2,nil,4}; y=Reverse(x)
        print(Add(x,y))
     {5,_,_,5}
 
@@ -385,6 +387,8 @@ a new array with the same shape as the original.
 
        C=Each(Copy)(A); print(C)
     ((1,2),(3,4),(5,6))
+       print(A[1]==C[1])
+    false
 
 The elements are now newly minted APL arrays, as is the containing
 array.
@@ -406,7 +410,13 @@ the possibility.).
 
        print(Each(Add)({{1,2,3,4},{5,6,7,8}},{1}))
     (2,3,4,5) (6,7,8,9)
-       print(Each(Add,true,false)({{1,2,3,4},{5,6,7,8}},{1}))
+       help(Each)
+    Each(f): f¨ → make a term-by-term function from f
+    Each(f,x_w,x_a): (no APL equivalent) Fine-tune constant arguments.
+       x_w=x_a=0: the shapes of _w and _a must be compatible.
+       x_w=1, x_a=1: _w,_a may be a singleton, which will be used every time.
+       x_w=2, x_a=2: _w,_a is used as such every time even if it is a table.
+       print(Each(Add,1,0)({{1,2,3,4},{5,6,7,8}},{1}))
     ./apl-lib.lua:497: bad argument #3 to 'both' (shapes are incompatible)
 
 A vector of vectors of the same length can be combined into a matrix,
@@ -430,23 +440,23 @@ umbrella for them in library mode.
 Several APL vector functions generalize to matrices by operating either
 on the rows or on the columns. In APL notation, the distinction is
 made by using different symbols (`⊖ ⌿ ⍀ ⍪` are the row-wise counterparts
-to `⌽ / \ ,`). In library mode, there is no need to avoid an extra axis
-argument, and so there is only one function name.
+to `⌽ / \ ,`). There are three different functions at issue here.
 
        help(Attach)
     Attach(⍵,⍺): ⍺,⍵ → elements of ⍺ followed by elements of ⍵
-    Attach(⍵,⍺,1): ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
-    Attach(⍵,⍺,2): ⍺,⍵ → columns of ⍺ followed by rows of ⍵
-      In the matrix cases, vectors are treated as one-row matrices.
+       help(Attach1)
+    Attach1(⍵,⍺): ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵
+       help(Attach2)
+    Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵
        print(Attach({1,2},{3}))
     (3,1,2)
-       print(Attach({1,2},{3},1))
+       print(Attach1({1,2},{3}))
     [3,0;1,2]
-       print(Attach({1,2},{3},2))
+       print(Attach2({1,2},{3}))
     [3,1,2]
 
-As you can see, Lua⋆APL's `Attach` pads short rows or columns to
-the length of the longest list.
+As you can see, `Attach1` pads short rows to the length of the longest list.
+`Attach1` pads short columns, but vectors count as one-row matrices.
 
 In Lua⋆APL, the principle is "act on rows when the axis is 1, act 
 on colums when the axis is 2", and the implementation is to convert 
@@ -454,50 +464,60 @@ the matrix to a nested array, do something to that nested array,
 and convert back.
 
 In the case of `Rotate`, there is a possibility of confusion here.
-`Rotate(A,1,1)` must rotate the rows of `A` up by 1, no question.
-What does `Rotate(A,{2,1,3,4},1)` do, rotate each row of `A` 
-individually by the specified amount? If so, `Rotate(A,{1,1,1,1},1)` 
+`Rotate1(A,1)` must rotate the rows of `A` up by 1, no question.
+What does `Rotate1(A,{2,1,3,4})` do, rotate each row of `A` 
+individually by the specified amount? If so, `Rotate1(A,{1,1,1,1})` 
 would rotate every row left by 1, i.e. it would rotate the columns
 left by 1. That would violate the APL principle that a singleton
 does the same as a constant vector. So we must violate the Lua⋆APL
-principle for the sake of the greater cause: `Rotate(A,{2,1,3,4},1)`
+principle for the sake of the greater cause: `Rotate1(A,{2,1,3,4})`
 rotates each _column_ of `A` individually by the specified amount.
 
-For later use by the APL compiler, specialized versions of these
-functions have been made with the axis argument fixed. These are
-available in library mode with a little extra trouble, but not in
-Lua or APL mode. That's why the prompts are the usual Lua prompts.
-
-    > print(apl._F.Attach1({1,2},{3}))
-    [3,0;1,2]
-    > print(apl._F.Attach2({1,2},{3}))
-    [3,1,2]
-
+       A=Copy{1,2,3,4;5,6,7,8;9,10,11,12;rows=3,cols=4}; print(A)
+     1  2  3  4
+     5  6  7  8
+     9 10 11 12
+       print(Rotate1(A,{2,1,3,4}))
+     9  6  3  8
+     1 10  7 12
+     5  2 11  4
+       
 ### High-level matrix functions
 
-The APL functions `MatDiv` and `MatInv` are calculated with the aid
-of the so-called "economy-size" singular value decomposition of 
-a matrix.  This represents the matrix as 
+In the case where `A` is a non-singular square matrix, `MatDiv(A,b)` 
+returns the unique solution of a system of linear equations and 
+`MatInv(A)` to the matrix inverse.
 
-    A = Inner(Add,Mul)(Each(Outer(Mul))(V,U),S)
+For a singular or non-square matrix, the numerical rank is determined. 
+`MatDiv(A,b)` returns the minimum-norm least-squares solution, and
+`MatInv(A)` the pseudo-inverse, for that rank.
 
-where `S` contains the singular values, and `U` and `V` the left and
-right singular vectors, of `A`. Or `S+.×U(∘.×)¨V` in APL notation.
+The determination of rank depends on non-negative numbers known as
+the singular values of `A` (see any text on matrix computations) and
+on the comparison tolerances (see [Global control variables]). 
+Specifically, if `_act` is nonzero, singular values less than `_act` 
+count as zero; if `_rct` is nonzero, singular values less than 
+`_rct*s[1]` count as zero. The rank equals the number of nonzero
+singular values. 
 
 In library mode, the function `SVD` has been provided for the 
-convenience of those who have use for these intermediate quantities.
-Its return value is a Lua table with the fields `S`, `U` and `V`. Each of
-these tables is a userdata with an `apl` method which returns an APL
-vector of length `m`, where `m` is the numerical rank of `A`. That is 
-to say, `U:apl()` and `V:apl()` are nested arrays.
+convenience of those who know the theory. Its return value is a Lua 
+table containing a vector `S` of singular values and nested arrays 
+`U` and `V` of left and right singular vectors respectively. At this 
+point library mode becomes just too inconvenient, so we resort to
+Lua mode.
 
-The numerical rank depends on the comparison tolerances (see [Global
-control variables]). Specifically, the elements of `s=S:apl()` are 
-positive numbers in nonincreasing order; if `_act` is nonzero, 
-elements less than `_act` count as zero; if `_rct` is nonzero,
-elements less that `_rct*s[1]` count as zero.
-
-
+       A=Reshape(Range(12),{3,4}); print(A)
+     1  2  3  4
+     5  6  7  8
+     9 10 11 12
+       U=USV.U; V=USV.V; S=USV.S; print(S)
+    25.43684 1.722612 2.681529e¯16
+       B=apl"+/S×¨U(∘.×)¨V"(); print(B)
+     1  2  3  4
+     5  6  7  8
+     9 10 11 12
+       
 Strings
 -------
 
@@ -513,7 +533,9 @@ library.
        print(Each(frombytes)(M))
     ('The','quick','brown','fox')
 
-The `apl.util` library has some support for UTF-8.
+The `apl.util` library has some support for UTF-8. See [List of Lua⋆APL 
+functions].
+
 
 Global control variables
 ------------------------
@@ -563,14 +585,14 @@ yourself. For most of these, you can get interactive help.
 
        help(apl)
     Contents: Abs Add And Assign Attach Attach1 Attach2 Binom Ceil Circ
-    Compress Compress1 Compress2 Copy Deal Decode Define Disclose Div Down
-    Drop Each Enclose Encode Execute Exp Expand Expand1 Expand2 Fact Find
-    Floor Format Has Inner Length Ln Log MatDiv MatInv Max Min Mod Mul Nand
-    Nor Not Or Outer Output Pass Pi Pow Range Ravel Recip Reduce Reduce1
-    Reduce2 Rerank Reshape Reverse Reverse1 Reverse2 Roll Rotate Rotate1
-    Rotate2 SVD Same Scan Scan1 Scan2 Shape Sign Sub Take TestEq TestGE
-    TestGT TestLE TestLT TestNE ToString Transpose Unm Up _act _rct help
-    import lua register util    
+        Compress Compress1 Compress2 Copy Deal Decode Define Disclose Div Down
+        Drop Each Enclose Encode Execute Exp Expand Expand1 Expand2 Fact Find
+        Floor Format Get Has Inner Length Ln Log MatDiv MatInv Max Min Mod Mul
+        Nand Nor Not Or Outer Output Pass Pi Pow Range Ravel Recip Reduce
+        Reduce1 Reduce2 Rerank Reshape Reverse Reverse1 Reverse2 Roll Rotate
+        Rotate1 Rotate2 SVD Same Scan Scan1 Scan2 Set Shape Sign Sub Take TestEq
+        TestGE TestGT TestLE TestLT TestNE ToString Transpose Unm Up _act _rct
+        help import lua register util  
        help(Transpose)
     Transpose: ⍉⍵ → matrix transpose of ⍵
 

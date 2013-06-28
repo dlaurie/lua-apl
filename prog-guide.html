@@ -11,21 +11,31 @@
 <h1 id="luaapl-programmers-guide">Lua⋆APL Programmer's Guide</h1>
 <p>© Dirk Laurie 2013 Lua-style MIT licence</p>
 <p>This part of the documentation is aimed at those who wish understand <code>apl.lua</code>.</p>
-<h2 id="apl-levels">APL levels</h2>
-<p>The program is divided into four main sections:</p>
-<ol style="list-style-type: decimal">
-<li>Utilities and the compiler</li>
-<li>Primitive scalar functions (<code>_APL_LEVEL=0</code>).</li>
-<li>Vector functions (<code>_APL_LEVEL=1</code>). Level 0 functions are redefined to operate on arrays, and vector versions of all APL functions are defined.</li>
-<li>Matrix functions (<code>_APL_LEVEL=2</code>). Some level 1 functions are redefined to operate on matrices.</li>
-</ol>
-<p>If <code>_APL_LEVEL</code> is set before requiring the module, nothing above that level is loaded. This may be useful when trying to isolate bugs.</p>
-<p>If <code>_APL_LEVEL&gt;2</code>, some internal tables are made available at the Lua level: <code>f1 f2 op1 op2 rank0 rank1</code>. The first four of these contain the functions used by APL, indexed by their Lua names. The other two contain similar collections, but give the functions as they were at Level 0 and Level 1, before being redefined.</p>
 <h2 id="registry">Registry</h2>
 <p>APL syntax depends on knowing whether a name refers to a function, a monadic operator, a dyadic operator or a value. For the built-in functions, including functions assigned to APL names, this information is predefined, but for user-defined functions, the function or operator must be registered. The name will then shadow an object of the same name in the APL global namespace.</p>
 <p>An unregistered name in an APL expression is always assumed to refer to a value.</p>
-<p>The registry appears in the source in the general vicinity of the function <code>register</code> as a table <code>classes</code>. Each of the five entries is an APL-to-Lua dictionary mapping an APL name to a Lua name. The composite dictionary <code>apl_dict</code> gives all the Lua names to which an APL name could be mapped and is used only by the help facility.</p>
-<h3 id="rank-modifiers">Rank modifiers</h3>
+<p>The registry appears in the source code just before the function <code>register</code> . Each of the five entries is an APL-to-Lua dictionary mapping an APL name to a Lua name. The dictionary <code>Reserved</code> contains items that will be exported in the module table under their Lua names but do not have genuine APL names: the supplied APL name is a mere tag for use by the help facility.</p>
+<p>The unclassified dictionary <code>apl_dict</code> keeps track all the Lua names to which an APL name could be mapped and is used only by the help facility.</p>
+<h2 id="apl-levels">APL levels</h2>
+<p>You can set global <em>APL</em>LEVEL before requiring <code>apl</code>. This is mainly intended as a debugging aid. Subsets of APL (each including the previous level) will be loaded as follows:</p>
+<dl>
+<dt><em>APL</em>LEVEL=0:</dt>
+<dd>All primitive scalar functions only act on scalars. <code>Range</code> and <code>Reshape</code> are available and create APL arrays, which have Lua indexing with range checks. <code>ToString</code> is fully-featured.
+</dd>
+<dt><em>APL</em>LEVEL=1:</dt>
+<dd>All functions act on arrays, mostly treating them as vectors. <code>Disclose</code>, <code>Enclose</code> and <code>Transpose</code> are explicitly matrix-aware. but most of the other functions respect shape only when creating the result.
+</dd>
+<dt><em>APL</em>LEVEL=2: (Default.)</dt>
+<dd>Lua⋆APL as documented in the User's Manual. This is the only level that prettyprints by default.
+</dd>
+<dt><em>APL</em>LEVEL&gt;2:</dt>
+<dd>Additional fields exposing the working of the system are available in the module table: <code>f1 f2 op1 op2 rank0 rank1 lib APL_ENV</code>. The first four of these contain the functions used by APL, classified as required by the compiler and indexed by their Lua names. The next two contain similarly classified Level 0 and Level 1 versions of functions that have been redefined. <code>lib</code> contains functions that are accessible in library mode but not from APL code. <code>APL_ENV</code> is the global environment for functions compiled by the APL compiler.
+</dd>
+</dl>
+<p>The program is divided into five main sections. The first section defines semi-globals, i.e. local variables whose scope is the entire file, plus the APL compiler. Among the semi-globals are twenty-odd short functions that are later exported in <code>apl.util</code>.</p>
+<p>The next three sections define levels 0, 1 and 2. Each section is almost a module on its own in the sense that dependencies (except semi-globals) are explicitly assigned to local variables.</p>
+<p>The final section populates the module table from the components <code>f1, f2, op1, op2, lib</code> and does some final finishing-off.</p>
+<h2 id="level-0">Level 0</h2>
 <hr />
 <h1 id="the-core-c-routines">The core C routines</h1>
 <p>Some of these have been adapted from other packages: for the block functions I acknowledge useful ideas of John Hind, Steve Fisher and Eike Decker. They are delivered in a table returned by <code>require apl_core</code>.</p>

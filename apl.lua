@@ -10,20 +10,8 @@ end
 local _VERSION = "Lua⋆APL 0.4.0"
 _APL_LEVEL = _APL_LEVEL or 2
 
--- You can set global _APL_LEVEL before requiring this module. This is mainly
--- intended as a debugging aid. Subsets of APL (each including the 
--- previous level) will be loaded as follows:
---    _APL_LEVEL=0: All primitive scalar functions only act on scalars.
---       `Range` and `Reshape` are available and create APL arrays, which
---       have Lua indexing with range checks. `ToString` is fully-featured.
---    _APL_LEVEL=1: All functions act on arrays, mostly treating them as 
---       vectors. `Disclose`, `Enclose` and `Transpose` are explicitly 
---       matrix-aware. but most of the other functions respect shape only 
---       when creating the result.
---    _APL_LEVEL=2: (Default.) Lua⋆APL as documented in the User's Manual.
---       This is the only level that prettyprints by default. 
---    _APL_LEVEL>2: Additional fields exposing the working of the system
---       are available as described in the Programmer's Guide.
+-- You can set global _APL_LEVEL before requiring this module. 
+-- It's mainly a debugging tool. See discussion in the Programmer's Guide.
 
 -- External modules
 
@@ -60,8 +48,8 @@ end})
 
 -- forward declaration of util routines
 local argcheck, arr, both, checksize, checktype, compat, each, filler, 
-  get,invert, iota, is, is_int, is_not, replace, rho, set, shape, start,
-  sum, utfchar, utflen
+  get, invert, iota, is, is_int, is_not, replace, rho, set, shape, 
+  singleton, start, sum, utfchar, utflen
 
           do --## local scope for util
 
@@ -140,8 +128,8 @@ replace = function(s,t,u)
    end 
 end
 
-rho = core.rho
-set=core.set
+rho=core.rho
+set=function(t,...) core.set(t,...) return t end
 
 shape = function(x) 
 --- shape as a variable-length return list
@@ -149,6 +137,12 @@ shape = function(x)
       local r,c = rawget(x,'rows'), rawget(x,'cols')
       if c then return r, c else return #x end
    end
+end
+
+--- if x is scalar or has just one element, return it
+singleton = function(x)
+   if is_not"table"(x) then return x end
+   if #x==1 then return x[1] end
 end
 
 start = function(x)
@@ -169,7 +163,8 @@ end
 util = {argcheck=argcheck, arr=arr, both=both, checksize=checksize,
   checktype=checktype, compat=compat, each=each, filler=filler, get=get,
   invert=invert, iota=iota, is=is, is_int=is_int, is_not=is_not, 
-  replace=replace, rho=rho, set=set, shape=shape, start=start, sum=sum }
+  replace=replace, rho=rho, set=set, shape=shape, singleton=singleton,
+  start=start, sum=sum }
 apl.util = util
 
           end -- local scope for util
@@ -275,7 +270,8 @@ end
 
 local classname={[0]="reserved", [1]="monadic function", 
    [2]="dyadic function", [5]="monadic operator", [6]="dyadic operator"}
-local classes={[0]={}, [1]=Monadic_functions, [2]=Dyadic_functions,
+local Reserved={}
+local registry={[0]=Reserved, [1]=Monadic_functions, [2]=Dyadic_functions,
    [3]='ambivalent', [5]=Monadic_operators, [6]=Dyadic_operators, 
    [7]='ambivalent'}
 -- Class 0 has phony APL names. They have no real purpose beyond being 
@@ -293,7 +289,7 @@ register = function (code, fct, APLname, LuaName, alias, helptext)
 --   LuaName: the Lua name
 --   alias: an alternative APL name (optional)
 --   help: help text accessible via the function itself 
-   local class=classes[code]
+   local class=registry[code]
    argcheck(class,1,"Must be 0,1,2,3,5,6 or 7")
    if class=='ambivalent' then 
       for k=1,2 do register(code-k,fct,APLname,LuaName,alias,helptext) end
@@ -430,25 +426,27 @@ local Assign = function(_w,_a,ij)
    _a[ij]=_w   
    return _w 
 end
-register(0,Assign,'←','Assign',nil,
-   "Assign: ⍵←⍺ → assign ⍺ to ⍵, see User's Manual")
-
-local Print = function(_w) print(_w); return _w end
-register(1,Print,'⎕','Output',nil,"Output: ⎕⍵ prints ⍵ and returns ⍵")
 
 local Define = function(_w)
    if is"function"(_w) then return _w end
    return load_apl(checktype(_w,"string",'⍵','Define'))
 end
-register(1,Define,'∇','Define',nil,[[
-Define: ∇s returns APL code `s` compiled as a Lua function
-        ∇f returns a function as-is]])
 
 local Execute = function(_w) return load_apl(_w)() end
-register(1,Execute,'⍎','Execute',nil,"Execute: ⍎⍵ → Define(⍵)()")
+local Length = function(x) return #x end
+local Print = function(_w) print(_w); return _w end
 
-register(1,function(x) return #x end,'≡','Length',nil,[[
-Length: ≡⍵ → Lua length operator applied to ⍵]])
+register(0,Assign,'←','Assign',nil,
+   "Assign: ⍵←⍺ → assign ⍺ to ⍵, see User's Manual")
+
+apl.f1 = {Length=Length, Print=Print, Define=Define,Execute=Execute}
+
+help(Print,"Print: ⎕⍵ prints ⍵ and returns ⍵")
+help(Define,[[
+Define: ∇s returns APL code `s` compiled as a Lua function
+        ∇f returns a function as-is]])
+help(Execute,"Execute: ⍎⍵ → Define(⍵)()")
+help(Length, "Length: ≡⍵ → Lua length operator applied to ⍵")
 
           end -- Basic APL routines
 
@@ -459,7 +457,7 @@ local Add, And, Binom, Circ, Deal, Div, Log, Max, Min, Mod, Mul, Nand,
    Nor, Or, Pow, Sub, TestEq, TestGE, TestGT, TestLE, TestLT, TestNE 
 local Format, NaN, Pass, Range, Reshape, Same, ToString
  
-local concat = table.concat
+local abs, concat = math.abs, table.concat
 
 local iverson = function(b) if b then return 1 else return 0 end end
 
@@ -535,6 +533,7 @@ Sign = function(_w) return _w<0 and -1 or _w>0 and 1 or 0 end
 Sub = function(_w,_a) return _a-_w end
 
 TestEq = function(_w,_a) 
+   local _act, _rct = apl._act, apl._rct
    if _a==_w then return 1 end
    if _act and abs(_w-_a)<_act then return 1 end
    if _rct and abs(_w-_a)<_rct*abs(_w) then return 1 end
@@ -596,7 +595,7 @@ local gen1={Pass=Pass, Range=Range, ToString=ToString}
 local gen2={Format=Format, Pass=Pass, Reshape=Reshape, Same=Same}
 
 apl.rank0 = {f1=f1, f2=f2}  -- primitive scalar functions
-apl.f1,apl.f2,apl.op1,apl.op2 = {},{},{},{}
+apl.f2,apl.op1,apl.op2 = {},{},{}
 replace(apl.f1,f1); replace(apl.f1,gen1);
 replace(apl.f2,f2); replace(apl.f2,gen2);
 
@@ -675,7 +674,7 @@ local Each, Outer, Reduce, Scan
 local Inner
 
 local transpose=core.transpose
-local max,min,random = math.max,math.min,math.random
+local abs,max,min,random = math.abs,math.max,math.min,math.random
 local sort,unpack = table.sort,table.unpack
 
 Attach = function(_w,_a)
@@ -755,22 +754,19 @@ Down = function(_w)
    return(Reverse(Up(_w)))
    end
 
-Drop = function(_w,_a)   
+Drop = function(_w,_a)
+   if _a<0 then return Reverse(Drop(Reverse(_w),-_a)) end
+   if is_not"table"(_w) then _w={_w} end
    local m,n=#_w,abs(_a)
    if n>=m then return rho(0,0) end
-   m=m-n
-   local res=rho(0,m)
-   local i=iota(m)
-   if _a<0 then res[i]=_w[i] else res[i]=_w[iota(m,n+1)] 
-   end
-   return res
+   if _a<0 then return Take(_w,m-n) else return Take(_w,n-m) end
 end
-
+    
 Each = function(f,ex1,ex2) 
 -- Applies function to every element. `ex1, ex2` control whether
 -- first or second argument may act as singleton anchor.
-   if ex1==nil then ex1=true end
-   if ex2==nil then ex2=true end
+   if ex1==nil then ex1=1 end
+   if ex2==nil then ex2=1 end
    return function(_w,_a) 
       if _a then return both(f,_w,_a,ex1,ex2)
       else return each(f,_w) 
@@ -998,27 +994,22 @@ Up = function(_w)
    return x
    end
 
-local register = apl.register
-register(0,Rotate,'','Rotate')
-register(0,Expand,'','Expand')
-register(0,Compress,'','Compress')
-register(0,Scan,'','Scan')
-register(0,Reduce,'','Reduce')
-register(0,Attach,'','Attach')
-register(0,Reverse,'','Reverse')
-register(0,Outer,'∘','Outer')
+apl.register(0,Outer,'∘','Outer')
 
+local lib={Rotate=Rotate, Expand=Expand, Compress=Compress, Scan=Scan,
+   Reduce=Reduce, Attach=Attach, Reverse=Reverse, Get=Get, Set=Set}
 local f1={Copy=Copy, Disclose=Disclose, Down=Down, Enclose=Enclose, 
    MatInv=MatInv, Ravel=Ravel, Reverse1=Reverse, Reverse2=Reverse,
    Shape=Shape, Transpose=Transpose, Up=Up}
 local f2={Attach1=Attach, Attach2=Attach, Compress1=Compress, 
    Compress2=Compress, Deal=Deal, Decode=Decode, Drop=Drop, Encode=Encode, 
-   Expand1=Expand, Expand2=Expand, Find=Find, Get=Get, Has=Has, MatDiv=MatDiv, 
-   Reshape=Reshape, Rotate1=Rotate, Rotate2=Rotate, Set=Set,Take=Take}
+   Expand1=Expand, Expand2=Expand, Find=Find, Has=Has, MatDiv=MatDiv, 
+   Reshape=Reshape, Rotate1=Rotate, Rotate2=Rotate, Take=Take}
 local op1={Each=Each,Reduce1=Reduce,Reduce2=Reduce,Scan1=Scan,Scan2=Scan}
 local op2={Inner=Inner}
 
 -- No need to copy help
+apl.lib=lib
 replace(apl.f1,f1,apl.rank0.f1);
 replace(apl.f2,f2,apl.rank0.f2);
 apl.op1=op1;
@@ -1035,7 +1026,12 @@ local helptext = {
 Disclose: ⊃⍵ makes a matrix from an array of rows. Each ⍵[i] is treated as
 a vector and padded to the maximum length using zeros or empty strings.]];
 [Drop] = "Drop: ⍺↓⍵ → ⍵ without its first ⍺ or last -⍺ elements";
-[Each] = "Each(f): f¨ → make a term-by-term function from f";  
+[Each] = [[
+Each(f): f¨ → make a term-by-term function from f
+Each(f,x_w,x_a): (Lua mode only) Fine-tune constant arguments.
+   x_w=x_a=0: the shapes of _w and _a must be compatible.
+   x_w=1, x_a=1: _w,_a may be a singleton, which will be used every time.
+   x_w=2, x_a=2: _w,_a is used as such every time even if it is a table.]];  
 [Enclose] = "Enclose: ⊂⍵ makes an array of rows from a matrix";
 [Encode] = "Encode: ⍵⊥⍺ → ⍺ considered as base ⍵ digits of result";
 [Expand] = 
@@ -1072,21 +1068,23 @@ for k,v in pairs(helptext) do help(k,v) end
 
           if _APL_LEVEL>1 then --## matrix functions
 
-local f1,f2,op1=apl.f1,apl.f2,apl.op1
+local lib,f1,f2,op1=apl.lib,apl.f1,apl.f2,apl.op1
 
-local drop, reverse = f1.Drop, f1.Reverse1
-local attach,    compress,    decode,   encode,   expand, rawformat,   rotate
- = f2.Attach1,f2.Compress1,f2.Decode,f2.Encode,f2.Expand1,f2.Format,f2.Rotate1
-local Each, reduce, scan = op1.Each,op1.Reduce1,op1.Scan1
-local Disclose,Enclose,Transpose=f1.Disclose,f1.Enclose,f1.Transpose
-local Add,    Mul,    Div,    TestEq, vecget, vecset = 
-   f2.Add, f2.Mul, f2.Div, f2.TestEq, f2.Get, f2.Set
+local attach,    compress,    expand,    reduce,    reverse,    rotate,    scan
+= lib.Attach,lib.Compress,lib.Expand,lib.Reduce,lib.Reverse,lib.Rotate,lib.Scan
+local decode,   drop,   encode,   rawformat, take
+ = f2.Decode,f2.Drop,f2.Encode,f2.Format, f2.Take 
+local Each = op1.Each
+local Disclose,   Enclose,   Transpose =
+   f1.Disclose,f1.Enclose,f1.Transpose
+local Add,    Mul,    Div,    TestEq,  vecget,  vecset = 
+   f2.Add, f2.Mul, f2.Div, f2.TestEq, lib.Get, lib.Set
 local Outer=apl.Outer
 
 local Attach,Attach1,Attach2, Compress1,Compress2, Expand1,Expand2, 
   Reduce1,Reduce2, Reverse1,Reverse2, Rotate,Rotate1,Rotate2, Scan1,Scan2
 local Decode,Drop, Encode, Format, Get, Inner, MatDiv, MatInv, Rerank, Set, 
-   SVD
+   SVD, Take
 
 local concat,max,min,format = table.concat,math.max,math.min,string.format
 
@@ -1113,6 +1111,22 @@ local form = function(item,fmt)
    item=format(fmt,item)
    if not fmt:match("%%s") then item=item:gsub('-','¯') end
    return item
+end
+
+--- iterator for actual indices in a submatrix
+-- n: length of a row
+-- i,j: selected rows and columns
+local indices = function(n,i,j)
+   local ni,nj = #i,#j
+   local k,l,m0 = 0,nj,0
+   return function()
+      l=l+1 
+      if l>nj then 
+         l=1; k=k+1; if k>ni then return end
+         m0=(i[k]-1)*n
+      end
+      return m0+j[l]
+   end
 end
 
 local inner = function(f,_w,_a)
@@ -1171,25 +1185,23 @@ Decode = function(_w,_a)
 end
 
 Drop = function(_w,_a)
-   checktype(_w,'table',1,'Drop')
-   arr(_w)
-   local m,n = shape(_w)
-   local s=singleton(_a)
-   if s and not n then return drop(_w,s) end
-   argcheck(not s and not n,2,"can't drop a matrix from a vector")
-   argcheck(s and n,2,"can't drop a vector from a matrix")
+   if is_not"table"(_a) then return drop(_w,_a) end
    argcheck(#_a==2,2,"can't drop an array of rank "..#_a)
-   return along(drop,2)(along(drop,1)(_w,_a[1]),2)
+   local w=singleton(_w)
+   if w then _w=rho(w,1,1) end
+   argcheck(_w.cols,"can't drop a matrix from a vector")
+   return along(drop,2)(along(drop,1)(_w,_a[1]),_a[2])
 end
 
 Encode = function(_w,_a) return inner(encode,_w,_a) end
 
 Format = function(_w,_a, level)
    level=level or 1
+   _a = _a or apl._format
    if _a=="raw" or level>2 or is"table"(_w) and level>1 then 
       return rawformat(_w) 
    end   
-   _a = _a or apl._format or "%.7g"
+   _a = _a or "%.7g"
    if is"number"(_a) then _a=aplformat(_a) end
    if _w==nil then return "_" end   
    if is"string"(_w) then return _w end
@@ -1221,6 +1233,7 @@ Get = function(_w,_a)
    local rows,cols = shape(_w)
    if is_not"table"(_a) or not cols then return vecget(_w,_a) end
    -- indexing a matrix
+   local n=#_a
    argcheck(n<=2,2,"expected two indices, got "..n)
    local i,j,submat,scalar = rawget(_a,1), rawget(_a,2), true, false
    if is"number"(i) and is"number"(j) then scalar=true end
@@ -1285,13 +1298,14 @@ Set = function(_w,_a,v)
    local rows,cols = shape(_w)
    if is_not"table"(_a) or not cols then return vecset(_w,_a,v) end
    -- indexing a matrix   
+   local n=#_a
    argcheck(n<=2,2,"expected two indices, got "..n)
    local i,j,submat = _a[1], _a[2], true
    if is"number"(i) then i={i}; submat=false end
    if is"number"(j) then j={j}; submat=false end
    if i==nil then i=iota(rows) end
    if j==nil then j=iota(cols) end
-   if v_tbl then
+   if is"table"(_v) then
       local l=0
       for k in indices(cols,i,j) do l=l+1; _w[k]=v[l] end
    else for k in indices(cols,i,j) do _w[k]=v end
@@ -1310,6 +1324,15 @@ SVD = function(_w)
    rawset(U,'rows',m); rawset(U,'cols',l)
    rawset(VT,'rows',l); rawset(VT,'cols',n)
    return {U=Enclose(Transpose(U)), S=S, V=Enclose(VT)}
+end
+
+Take = function(_w,_a)
+   if is_not"table"(_a) then return take(_w,_a) end
+   argcheck(#_a==2,2,"can't take an array of rank "..#_a)
+   local w=singleton(_w)
+   if w then _w=rho(w,1,1) end
+   argcheck(_w.cols,"can't take a matrix from a vector")
+   return along(take,2)(along(take,1)(_w,_a[1]),_a[2])
 end
 
 Attach1 = function(_w,_a) return Attach(_w,_a,1) end;
@@ -1347,37 +1370,51 @@ local helptext = {
 }
 for k,v in pairs(helptext) do help(k,v) end
 
+local lib={Get=Get,Set=Set,Rerank=Rerank,SVD=SVD}
 local f1={Down=Down, MatInv=MatInv, Ravel=Ravel, Reverse1=Reverse1, 
    Reverse2=Reverse2}
 local f2={Attach1=Attach1, Attach2=Attach2, Compress1=Compress1, 
    Compress2=Compress2, Decode=Decode, Drop=Drop, Encode=Encode, 
-   Expand1=Expand1, Expand2=Expand2, Format=Format, Get=Get, MatDiv=MatDiv, 
+   Expand1=Expand1, Expand2=Expand2, Format=Format, MatDiv=MatDiv, 
    Reshape=Reshape, Rotate1=Rotate1, Rotate2=Rotate2, Take=Take}
 local op1={Reduce1=Reduce1,Reduce2=Reduce2,Scan1=Scan1,Scan2=Scan2}
 local op2={Inner=Inner}
 
-apl.rank1={f1={},f2={},op1={},op2={}}
-for class,group in pairs(apl.rank1) do -- copy over help for new function
-   for k,v in pairs(group) do 
-      if not help(apl[class][k],0) then help(apl[class][k],help(v,0)) end
-   end
-end
+apl.rank1={f1={},f2={},op1={},op2={},lib={}}
+
+replace(apl.lib,lib,apl.rank1.lib)
 replace(apl.f1,f1,apl.rank1.f1);
 replace(apl.f2,f2,apl.rank1.f2);
 replace(apl.op1,op1,apl.rank1.op1)
 replace(apl.op2,op2,apl.rank1.op2)
 
-apl.register(0,Rerank,'','Rerank')
-apl.register(0,SVD,'','SVD')
+for class,group in pairs(apl.rank1) do -- copy over help for new function
+   for k,v in pairs(group) do 
+      if not help(apl[class][k],0) then help(apl[class][k],help(v,0)) end
+   end
+end
+
+help(Rerank, [[
+Rerank(_w,_a): array of one rank higher (_a>0) or lower (_a<0), stacking 
+   rows (±1) or columns (±2). See Disclose/Enclose.]])
+help(SVD, [[
+SVD(A): A table with three entries containing the SVD of an m×n matrix A.
+  S: min(m,n) singular values of A. 
+  U: nested array of left singular vectors.
+  V: nested array of right singular vectors.]])
 
           end -- matrix functions
 
           do  --## Build the compiler tables from the dictionary
 
-local f1 = {Abs='∣', Ceil='⌈', Disclose='⊃', Enclose='⊂', Exp='⋆', Fact='!', 
-  Floor='⌊', ToString='⍕', Ln='⍟', Unm='−', Not='∼', Pi='○', Recip='÷', 
-  Roll='?', Sign='×', Copy='+', Down='⍒', MatInv='⌹', Pass='∘', Range='⍳', 
-  Ravel=',', Reverse1='⊖', Reverse2='⌽', Shape='⍴', Transpose='⍉', Up='⍋'}
+print"Already in module table:"
+help(apl)
+
+local f1 = {Abs='∣', Ceil='⌈', Disclose='⊃', Enclose='⊂', Exp='⋆', Define='∇',
+  Execute='⍎', Fact='!', Floor='⌊', Length='≡', Ln='⍟', Unm='−', Not='∼',
+  Pi='○', Recip='÷', Roll='?', Sign='×', Copy='+', Down='⍒', MatInv='⌹',
+  Pass='∘', Print='⎕', Range='⍳', Ravel=',', Reverse1='⊖', Reverse2='⌽',
+  Shape='⍴', ToString='⍕', Transpose='⍉', Up='⍋'}
 
 local f2={Add='+', And='∧', Binom='!', Circ='○', Div='÷', Log='⍟', Max='⌈', 
   Min='⌊', Mod='∣', Mul='×', Nand='⍲', Nor='⍱', Or='∨', Pow='⋆', Sub='−', 
@@ -1402,11 +1439,14 @@ local function build(mapping,funcs,class)
       apl.register(class,funcs[LuaName],APLname,LuaName,alias[APLname])      
    end
 end
-
 build(lua_dict.f1,apl.f1,1); 
 build(lua_dict.f2,apl.f2,2); 
 build(lua_dict.op1,apl.op1,5); 
 build(lua_dict.op2,apl.op2,6);
+
+for k,v in pairs(apl.lib) do apl.register(0,v,'',k) end
+
+-- Functions 
 
 unit = {[apl.Add]=0, [apl.Mul]=1, [apl.And]=1, [apl.Or]=0,
   [apl.Min]=math.huge, [apl.Max]=-math.huge}
@@ -1426,8 +1466,8 @@ arr_meta.__lt = function(x,y)  -- lexicographic comparison
      end end
    return false
 end
-arr_meta.__index = apl.f2.Get
-arr_meta.__newindex = apl.f2.Set
+arr_meta.__index = apl.lib.Get
+arr_meta.__newindex = apl.lib.Set
 
 apl._act=1/bit32.lshift(1,24)^2
 apl._rct=apl._act
@@ -1462,7 +1502,8 @@ If you can't remember the README, do this:
 print("In Lua mode, you will need `apl:import()` first.\n--")
 
           if _APL_LEVEL<3 then -- remove links to internal tables
-apl.APL_ENV, apl.f1, apl.f2, apl.op1, apl.op2, apl.rank0, apl.rank1 = nil
+apl.APL_ENV, apl.f1, apl.f2, apl.op1, apl.op2, apl.rank0, apl.rank1, apl.lib 
+   = nil
           end
 
 loading=false

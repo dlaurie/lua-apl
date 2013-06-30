@@ -17,18 +17,18 @@
 <p>The registry appears in the source code just before the function <code>register</code> . Each of the five entries is an APL-to-Lua dictionary mapping an APL name to a Lua name. The dictionary <code>Reserved</code> contains items that will be exported in the module table under their Lua names but do not have genuine APL names: the supplied APL name is a mere tag for use by the help facility.</p>
 <p>The unclassified dictionary <code>apl_dict</code> keeps track all the Lua names to which an APL name could be mapped and is used only by the help facility.</p>
 <h2 id="apl-levels">APL levels</h2>
-<p>You can set global <em>APL</em>LEVEL before requiring <code>apl</code>. This is mainly intended as a debugging aid. Subsets of APL (each including the previous level) will be loaded as follows:</p>
+<p>You can set global <code>_APL_LEVEL</code> before requiring <code>apl</code>. This is mainly intended as a debugging aid. Subsets of APL (each including the previous level) will be loaded as follows:</p>
 <dl>
-<dt><em>APL</em>LEVEL=0:</dt>
+<dt><code>_APL_LEVEL=0</code>:</dt>
 <dd>All primitive scalar functions only act on scalars. <code>Range</code> and <code>Reshape</code> are available and create APL arrays, which have Lua indexing with range checks. <code>ToString</code> is fully-featured.
 </dd>
-<dt><em>APL</em>LEVEL=1:</dt>
+<dt><code>_APL_LEVEL=1</code>:</dt>
 <dd>All functions act on arrays, mostly treating them as vectors. <code>Disclose</code>, <code>Enclose</code> and <code>Transpose</code> are explicitly matrix-aware. but most of the other functions respect shape only when creating the result.
 </dd>
-<dt><em>APL</em>LEVEL=2: (Default.)</dt>
+<dt><code>_APL_LEVEL=2</code>: (Default.)</dt>
 <dd>Lua⋆APL as documented in the User's Manual. This is the only level that prettyprints by default.
 </dd>
-<dt><em>APL</em>LEVEL&gt;2:</dt>
+<dt><code>_APL_LEVEL&gt;2</code>:</dt>
 <dd>Additional fields exposing the working of the system are available in the module table: <code>f1 f2 op1 op2 rank0 rank1 lib APL_ENV</code>. The first four of these contain the functions used by APL, classified as required by the compiler and indexed by their Lua names. The next two contain similarly classified Level 0 and Level 1 versions of functions that have been redefined. <code>lib</code> contains functions that are accessible in library mode but not from APL code. <code>APL_ENV</code> is the global environment for functions compiled by the APL compiler.
 </dd>
 </dl>
@@ -102,27 +102,20 @@
 <p>The table also returns six functions needed for the <code>Circ</code> function (APL <code>○</code>) which are not described here.</p>
 <h2 id="block-functions">Block functions</h2>
 <p>Block functions all have a table and two integers as their first three arguments. The notation <code>tbl[a:b]</code> is used for a block of values with increasing keys if <code>a&lt;b</code> and decreasing keys if <code>a&gt;b</code>. Thus <code>tbl[b:a]</code> is the reverse of <code>tbl[a:b]</code>.</p>
-<hr />
 <h3 id="gettblab"><code>get(tbl,a,b)</code></h3>
 <p>Returns <code>tbl[a:b]</code>. This function may cause stack overflow if too many items are requested.</p>
-<hr />
 <h3 id="movetblabcd"><code>move(tbl,a,b,c[,d])</code></h3>
 <p>Moves <code>tbl[a,b]</code> to <code>tbl[c,d]</code>, overwriting whatever was there. If <code>d</code> is omitted, it is calculated so that <code>b-a=d-c</code>. Returns <code>tbl</code>.</p>
-<hr />
 <h3 id="picktblabfctcount"><code>pick(tbl,a,b,fct[,count])</code></h3>
 <p>If <code>count==1</code>, returns the first index <code>i</code> in <code>a:b</code> such that <code>fct(tbl[i])</code> is true. If <code>count&gt;1</code>, ignores the first <code>count-1</code> hits. If <code>fct</code> is not a function or if <code>count&lt;1,</code> returns nil.</p>
-<hr />
 <h3 id="settblab..."><code>set(tbl,a,b,...)</code></h3>
 <p>Sets <code>tbl[a:b]</code> to the given values, overwriting existing values. Returns <code>tbl</code>.</p>
 <p>If the vararg list is empty (not even containing <code>nil</code>), stores nothing. The list is treated cyclically: if it is exhausted before <code>b</code> is reached, the supply of values is resumed from its beginning. If <code>b</code> is nil, values are stored in <code>tbl[a],tbl[a+1],...</code> until the list is exhausted.</p>
-<hr />
 <h3 id="transposetblabtarget"><code>transpose(tbl,a,b,target)</code></h3>
 <p>Stores the transpose of <code>tbl[1:a*b]</code> in <code>target[1:a*b]</code>. <code>tbl</code> is assumed to contain <code>a</code> blocks of <code>b</code> elements, and <code>target</code> will contain <code>b</code> blocks of <code>a</code> elements. Returns <code>target</code>.</p>
 <p><code>tbl</code> and <code>target</code> are not allowed to be the same array.</p>
-<hr />
 <h3 id="sorttblabcmp"><code>sort(tbl,a,b[,cmp])</code></h3>
 <p>Sorts <code>tbl[a:b]</code> by insertion.</p>
-<hr />
 <h3 id="mergetbllowmiddlehighcmp"><code>merge(tbl,low,middle,high[,cmp])</code></h3>
 <p>Merges <code>tbl[low:middle]</code> with <code>tbl[middle+1:high'</code> according to <code>cmp</code> (specified as for the standard <code>table.sort</code>). Both halves are assumed to be already sorted.</p>
 <h2 id="apl-functions">APL functions</h2>
@@ -154,29 +147,24 @@ specified by `e1` and `e2`.
 <li><code>a</code> and <code>b</code> have the same shape.</li>
 <li><code>a</code> or <code>b</code> is a vector, and the other is a one-row or a one-column matrix of the same length.</li>
 </ol>
-<hr />
 <h3 id="eachfx"><code>each(f,x)</code></h3>
 <p>Applies unary <code>f</code> term-by-term to every element of <code>x</code>, producing a result of the same shape as <code>x</code>.</p>
-<hr />
 <h3 id="iotanstart1"><code>iota(n[,start=1])</code></h3>
 <p>Returns an APL vector containing the first <code>n</code> integers from the given start.</p>
 <h3 id="rhovmn"><code>rho(v,m[,n])</code></h3>
 <p>Returns an APL vector of length <code>m</code>, or an APL matrix of shape <code>m×n</code>, filled with copies of <code>v</code>.</p>
 <h3 id="svda"><code>svd(A)</code></h3>
-<p>Calls the LAPACK routine <code>dgesvd</code> and organizes its output into a Lua table containing three APL arrays <code>U</code>, <code>S</code>, <code>V</code>. See User's Manual.</p>
+<p>Calls the LAPACK routine <code>dgesvd</code> and organizes its output into a Lua table containing APL arrays <code>U</code>, <code>S</code>, <code>V</code>. See User's Manual.</p>
 <h2 id="other-functions">Other functions</h2>
 <h3 id="is_intx"><code>is_int(x)</code></h3>
 <p>Tests whether <code>x</code> equals <code>tointeger(x)</code>.</p>
 <h3 id="keepcount..."><code>keep(count,...)</code></h3>
 <p>Returns <code>count</code> arguments, starting at the first extra argument. As in the case of <code>select</code>, a negative number indexes from the end (-1 is the last argument).</p>
-<hr />
 <h3 id="mapft..."><code>map(ft,...)</code></h3>
 <p>Each return value is the result of <code>ft</code> applied to the corresponding value in the tuple.</p>
 <p>&quot;Applying&quot; means indexing if <code>ft</code> is a table and calling if <code>ft</code> is a function, which is assumed to be unary with one return value.</p>
-<hr />
 <h3 id="tointegerx"><code>tointeger(x)</code></h3>
 <p>The result of the API function <code>lua_tointeger</code>.</p>
-<hr />
 <h3 id="wherelevel"><code>where(level)</code></h3>
 <p>Returns a string identifying the point in the source code from which <code>where</code> is being called if <code>level=1</code>, the point from which that routine was called if <code>level=2</code>, etc.</p>
 </body>

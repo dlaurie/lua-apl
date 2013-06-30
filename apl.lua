@@ -15,7 +15,7 @@ _APL_LEVEL = _APL_LEVEL or 2
 
 -- External modules
 
-local lpeg=require"lpeg"
+local lpeg=require"lulpeg"
 local core=require"apl_core"
 local help=require"help"
 
@@ -47,11 +47,16 @@ setmetatable(_ENV,{__newindex = function (ENV,name,value)
 end})
 
 -- forward declaration of util routines
-local argcheck, arr, both, checksize, checktype, compat, each, filler, 
-  get, invert, iota, is, is_int, is_not, replace, rho, set, shape, 
-  singleton, start, sum, utfchar, utflen
+local all, argcheck, arr, both, checksize, checktype, compat, each,
+  filler, get, invert, iota, is, is_int, is_not, replace, rho, same, 
+  set, shape, singleton, start, sum, utfchar, utflen
 
           do --## local scope for util
+
+all = function(test,x)
+   for k,v in ipairs(x) do if not test(v) then return false end end
+   return true
+end
 
 argcheck = function(cond,pos,msg,name)
    name = debug.getinfo(2,'n').name or name or "<anonymous>"
@@ -129,6 +134,7 @@ replace = function(s,t,u)
 end
 
 rho=core.rho
+same=function(x,y) return type(x)==type(y) and x==y end
 set=function(t,...) core.set(t,...) return t end
 
 shape = function(x) 
@@ -160,11 +166,11 @@ sum = function(x)
    return s
 end 
 
-util = {argcheck=argcheck, arr=arr, both=both, checksize=checksize,
+util = {all=all, argcheck=argcheck, arr=arr, both=both, checksize=checksize,
   checktype=checktype, compat=compat, each=each, filler=filler, get=get,
   invert=invert, iota=iota, is=is, is_int=is_int, is_not=is_not, 
-  replace=replace, rho=rho, set=set, shape=shape, singleton=singleton,
-  start=start, sum=sum }
+  replace=replace, rho=rho, same=same, set=set, shape=shape, 
+  singleton=singleton, start=start, sum=sum }
 apl.util = util
 
           end -- local scope for util
@@ -363,6 +369,8 @@ end
 apl.lua = lua_code
 apl.register = register
 
+help('method',nil)
+
 apl.help = function(topic,...)
 -- Displays brief documentation of a function or a predefinedtopic; 
 -- lists keys of a table. Examples are given in `help"start"`.
@@ -529,7 +537,7 @@ Range = core.iota
 Recip = function(_w) return 1/_w end
 Reshape = core.rho
 Roll = math.random 
-Same = function(_w,_a) return iverson(_a==_w) end
+Same = function(_w,_a) return iverson(same(_a,_w)) end
 Set = core.newindex
 Sign = function(_w) return _w<0 and -1 or _w>0 and 1 or 0 end 
 Sub = function(_w,_a) return _a-_w end
@@ -676,8 +684,10 @@ local Each, Outer, Reduce, Scan
 local Inner
 
 local transpose=core.transpose
+local rawformat=apl.f1.ToString
 local abs,max,min,random = math.abs,math.max,math.min,math.random
-local sort,unpack = table.sort,table.unpack
+local sort,      unpack,      concat,       format = 
+table.sort,table.unpack,table.concat,string.format
 
 Attach = function(_w,_a)
    _w=arr(_w); _a=arr(_a)
@@ -829,6 +839,32 @@ Find = function(_w,_a)
    for k=1,#res do res[k]=lookup[res[k]] or past end
    return res
 end
+
+local function aplformat(f)
+   --- convert APL format to string format
+   if is"string"(f) then return(f) end
+   checktype(f,'number',1)
+   return '%'..("%.1f"):format(abs(f))..(f<0 and 'e' or 'f')
+end
+
+local form = function(fmt,item)
+   -- convert minus to  high    
+   if is"string"(_w) then return _w end
+   item=format(fmt,item)
+   if not fmt:match("%%s") then item=item:gsub('-','¯') end
+   return item
+end
+
+Format = function(_w,_a)
+   if _w==nil then return "_" end   
+   if is"string"(_w) then return _w end
+   if not(_w==_w) then return "NaN" end
+   _a = _a and each(aplformat,_a) or apl._format 
+   if _a=="raw" then return rawformat(_w) end   
+   _a = _a or "%.7g"
+   if is"table"(_w) then return concat(Each(form)(_a,_w),' ') end
+   return _a:format(_w)
+end   
 
 Get = function(_w,_a)
    checktype(_w,'table',1)
@@ -1005,8 +1041,8 @@ local f1={Copy=Copy, Disclose=Disclose, Down=Down, Enclose=Enclose,
    Shape=Shape, Transpose=Transpose, Up=Up}
 local f2={Attach1=Attach, Attach2=Attach, Compress1=Compress, 
    Compress2=Compress, Deal=Deal, Decode=Decode, Drop=Drop, Encode=Encode, 
-   Expand1=Expand, Expand2=Expand, Find=Find, Has=Has, MatDiv=MatDiv, 
-   Reshape=Reshape, Rotate1=Rotate, Rotate2=Rotate, Take=Take}
+   Expand1=Expand, Expand2=Expand, Find=Find, Format=Format, Has=Has, 
+   MatDiv=MatDiv, Reshape=Reshape, Rotate1=Rotate, Rotate2=Rotate, Take=Take}
 local op1={Each=Each,Reduce1=Reduce,Reduce2=Reduce,Scan1=Scan,Scan2=Scan}
 local op2={Inner=Inner}
 
@@ -1073,21 +1109,22 @@ local lib,f1,f2,op1=apl.lib,apl.f1,apl.f2,apl.op1
 
 local attach,    compress,    expand,    reduce,    reverse,    rotate,    scan
 = lib.Attach,lib.Compress,lib.Expand,lib.Reduce,lib.Reverse,lib.Rotate,lib.Scan
-local decode,   drop,   encode,   rawformat, take
- = f2.Decode,f2.Drop,f2.Encode,f2.Format, f2.Take 
+local decode,   drop,   encode,   take,vecformat
+ = f2.Decode,f2.Drop,f2.Encode,f2.Take,f2.Format 
+local rawformat=f1.ToString
 local Each = op1.Each
 local Disclose,   Enclose,   Transpose =
    f1.Disclose,f1.Enclose,f1.Transpose
-local Add,    Mul,    Div,    TestEq,  vecget,  vecset = 
-   f2.Add, f2.Mul, f2.Div, f2.TestEq, lib.Get, lib.Set
+local Add,    Mul,    Div,    Same,    TestEq,  vecget,  vecset = 
+   f2.Add, f2.Mul, f2.Div, f2.Same, f2.TestEq, lib.Get, lib.Set
 local Outer=apl.Outer
 
 local Attach,Attach1,Attach2, Compress1,Compress2, Expand1,Expand2, 
   Reduce1,Reduce2, Reverse1,Reverse2, Rotate,Rotate1,Rotate2, Scan1,Scan2
-local Decode,Drop, Encode, Format, Get, Inner, MatDiv, MatInv, Rerank, Set, 
+local Decode, Drop, Encode, Format, Get, Inner, MatDiv, MatInv, Rerank, Set, 
    SVD, Take
 
-local concat,max,min,format = table.concat,math.max,math.min,string.format
+local concat,max,min = table.concat,math.max,math.min
 
 local along=function(f,k,func)
 --- If f works on a vector, along(f,k) works on a matrix along axis k
@@ -1097,21 +1134,6 @@ local along=function(f,k,func)
       else return Rerank(f(Rerank(_w,-k),_a),k)
       end    
    end
-end
-
-local function aplformat(f)
-   --- convert APL format to string format
-   if is"string"(f) then return(f) end
-   checktype(f,'number',1)
-   return '%'..("%.1f"):format(abs(f))..(f<0 and 'e' or 'f')
-end
-
-local form = function(item,fmt)
-   -- invert the order (APL's format is _a, not _w), convert minus to 
-   --   high    if is"string"(item) then return item end
-   item=format(fmt,item)
-   if not fmt:match("%%s") then item=item:gsub('-','¯') end
-   return item
 end
 
 --- iterator for actual indices in a submatrix
@@ -1196,37 +1218,20 @@ end
 
 Encode = function(_w,_a) return inner(encode,_w,_a) end
 
-Format = function(_w,_a, level)
-   level=level or 1
-   _a = _a or apl._format
-   if _a=="raw" or level>2 or is"table"(_w) and level>1 then 
-      return rawformat(_w) 
-   end   
-   _a = _a or "%.7g"
-   if is"number"(_a) then _a=aplformat(_a) end
-   if _w==nil then return "_" end   
-   if is"string"(_w) then return _w end
-   if is"number"(_w) then if not(_w==_w) then return "NaN"
-      else return form(_w,_a) 
-   end end
-   if is"table"(_w) then 
-      local cols = rawget(_w,'cols')
-      local data = {}
-      local n = #_w
-      local l = 0
-      for k=1,n do 
-         local item=Format(rawget(_w,k),_a,level+1)
-         l=max(l,#item)
-         data[#data+1]=item 
-         if k<n then if cols and k%cols==0 then data[#data+1]='\n'
-         else data[#data+1]=' '
-         end end 
-      end
-      if cols then for k=1,#data,2 do 
-         data[k]=(' '):rep(l-#data[k])..data[k] 
-      end end      
-      return concat(data)
-   else return type(v) end   
+local function autoformat(x)
+--- compute ideal width for column
+   if all(is_int,x) then x=each(tostring,x) end
+   if all(is"string",x) then return Reduce2(max)(each(rawlen,x)) end
+   return -16.7
+end
+
+Format = function(_w,_a)
+   local m,n = shape(_w)
+   if not n then return vecformat(_w,_a) end
+   _a = _a or apl._format 
+   if same(_a,'raw') then return rawformat(_w) end
+   _a = _a or each(autoformat,Rerank(_w,-2))
+   return concat(both(vecformat,Enclose(_w),_a,0,2),'\n')
 end   
 
 Get = function(_w,_a)

@@ -759,10 +759,11 @@ at the very heart of the Lua way of thinking,
 
 In APL, the number of arguments to a function is absolutely central.
 Funtions are _niladic_ (no arguments), _monadic_ (one argument) or
-_dyadic_ (two arguments). Lua⋆APL syntax does not make provision for 
-niladic functions. Functions may be _ambivalent_, i.e. take either one
-or two arguments, deducible from the way the expression is formed, and 
-in such a case may call different Lua functions.
+_dyadic_ (two arguments). At present, niladic functions can only be 
+executed from Lua; Lua⋆APL syntax does not make provision for them. 
+Functions may be _ambivalent_, i.e. take either one or two arguments, 
+deducible from the way the expression is formed, and in such a case 
+may call different Lua functions.
 
 The APL syntax allows the valence of a function to be determined from
 its context in the expression. Just like Lua knows the difference 
@@ -908,11 +909,13 @@ fully here.
 ~   Does `Define` and returns the value of the function thus constructed
     after calling it with no arguments.
 
-`⎕` (`Print`)
-~   Returns its argument after printing it. (In some APL's this is
-    a pseudo-variable to which you must assign; in Lua⋆APL it is 
-    a monadic function.)
-
+'⍞`,`⎕` (`Read`,`Do`,`Print`)
+~   These are not really functions from the APL point of view, they are
+    variables with special semantics. `⍞←x` causes the value `x` to be
+    printed; `⍞` as a variable means the string you will be prompted to
+    type in. `⎕←x` does the same as `⍞←x`; `⎕` as a variable means the
+    result of executing the string you will be prompted to type in.
+    
 `lua`
 ~   Returns the Lua code to which a function has been compiled.
  
@@ -991,6 +994,10 @@ For example, an expression can consist of just a single variable name
 (since a variable is a value, and a value is a left argument), but this
 possibility is only tried when all the other possibilities for an
 expression have failed.
+
+A simplified version of that grammar is given below. The full grammar,
+complete with compilation captures and special cases, is contained in 
+the table `apl_expr` in the module file `lua.apl`. 
 
     statement = '←'*expr 
       + Param*'←'*expr 

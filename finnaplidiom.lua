@@ -7,7 +7,7 @@
 --
 -- Usage: `idiom = require "finnaplidiom"`
 -- Note that `idiom` has holes. This is tolerated for the sake of retaining the 
--- original numbering. `idiom.n` gives the largest index.
+-- original numbering. `idiom.maxn` gives the largest index.
 --
 -- Brief explanation of a typical idiom
 --

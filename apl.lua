@@ -15,7 +15,7 @@ _APL_LEVEL = _APL_LEVEL or 2
 
 -- External modules
 
-local lpeg=require"lulpeg"
+local lpeg=require"lpeg"
 local core=require"apl_core"
 local help=require"help"
 
@@ -227,8 +227,10 @@ local Dyadic_function = _s^0*Cmt(name,lookup(Dyadic_functions))*_s^0
 local Dyadic_operator = _s^0*Cmt(name,lookup(Dyadic_operators))*_s^0
 local operator = Monadic_operator + Dyadic_operator
 local funcname = Monadic_function + Dyadic_function
+local Name = _s^0*C(first*later^0+utf-funcname-operator)*_s^0
 local Param = _s^0*(P'⍺'/'_a' + P'⍵'/'_w')*_s^0 -- not to be looked up in _V
-local Var = _s^0*C(first*later^0+utf-funcname-operator)*_s^0 - Param
+local Console = _s^0*(P"⎕"/1+P"⍞"/1)*_s^0
+local Var = Name - Param - Console
 
 local expr,   leftarg,   value,   index,   indices,   func_expr
    =V"expr",V"leftarg",V"value",V"index",V"indices",V"func_expr"
@@ -241,6 +243,7 @@ local apl_expr = P { "statement";
      + Param/1*"["*indices*"]"*'←'*expr/"%1[%2]=%3"
      + expr;
    expr = '∇'*func_expr
+     + Console*'←'*expr/"Print(%2)"
      + Var*'←'*expr/"Assign(%2,'%1')" 
      + Var*"["*indices*"]"*'←'*expr/"Assign(%3,'%1',%2)" 
      + leftarg*dyadic_func*expr/"%2(%3,%1)" 
@@ -252,12 +255,12 @@ local apl_expr = P { "statement";
      + Dyadic_function + Monadic_function;
    ambivalent = func_expr*Monadic_operator/"%2(%1)"
       + func_expr*Dyadic_operator*func_expr/"%2(%1,%3)";
-   leftarg = value + '('*expr*')'/1;
-   value = Vector/numbers + String/1 +
-      (Var*'['*indices*']'/"%1[%2]" + Var)/"_V.%1" + 
-      (Param*'['*indices*']'/"%1[%2]" + Param)/1;
+   leftarg = value + ('('*expr*')'*('['*indices*']')^0)/1;
+   value = Vector/numbers + String/1 + Console/"Input'%1'"
+      + (Var*'['*indices*']'/"%1[%2]" + Var)/"_V.%1" 
+      + (Param*'['*indices*']'/"%1[%2]" + Param)/1;
    index = expr+_s^0/"nil";
-   indices = index*';'*index/"{%1;%2}" + expr;
+   indices = index*';'*index/"{%1;%2}" + index;
    }
 
 local apl2lua
@@ -339,13 +342,13 @@ end
 local preamble=[[local _w,_a=... 
 ]]
 
+local assignment = Name*(P'['*(1-P']')^0*P']')^0*'←'
 load_apl = function(_w)
    checktype(_w,'string',1)
    _w = _w:gsub("⍝[^\n]+"," "):gsub("\n"," ")  -- strip off APL comments
    local lua = apl2lua(_w)
-   if select(2,_w:gsub('⋄',''))==0 then  
-      lua="return "..lua 
-      end
+   if select(2,_w:gsub('⋄',''))==0 and not assignment:match(_w) 
+      then lua="return "..lua end
    local f,msg = load(preamble..lua,nil,nil,APL_ENV)
    if not f then 
       error("Could not compile: ".._w.."\n Tried: "..lua.."\n"..msg) 
@@ -443,13 +446,21 @@ end
 local Execute = function(_w) return load_apl(_w)() end
 local Length = function(x) return #x end
 local Print = function(_w) print(_w); return _w end
+local Input = function(prompt)
+   io.write(prompt..': ')
+   local line=io.stdin:read()
+   if prompt=='⍞' then return line else return Execute(line) end
+end
 
 register(0,Assign,'←','Assign',nil,
    "Assign: ⍵←⍺ → assign ⍺ to ⍵, see User's Manual")
+register(0,Print,'⎕','Print',nil,[[
+Print: ⎕←⍵ prints ⍵ and returns ⍵. See also ⍞.]])
+register(0,Input,'⍞','Input',nil,[[
+Input(_w): ⍞ returns a line typed in; ⎕ returns the result of executing it.
+   In Lua mode, `_w` must be ⍞ or ⎕. See also ⎕.]]) 
 
 apl.f1 = {Length=Length, Print=Print, Define=Define,Execute=Execute}
-
-help(Print,"Print: ⎕⍵ prints ⍵ and returns ⍵")
 help(Define,[[
 Define: ∇s returns APL code `s` compiled as a Lua function
         ∇f returns a function as-is]])
@@ -849,9 +860,12 @@ end
 
 local form = function(fmt,item)
    -- convert minus to  high    
-   if is"string"(_w) then return _w end
+   if is"table"(item) then return rawformat(item) end
+   if is"string"(_item) then 
+      if fmt:match"[efg]$" then fmt=fmt:match"%%%d+".."s" end
+   end
    item=format(fmt,item)
-   if not fmt:match("%%s") then item=item:gsub('-','¯') end
+   if not fmt:match("^%%.*s$") then item=item:gsub('-','¯') end
    return item
 end
 
@@ -1416,7 +1430,7 @@ SVD(A): A table with three entries containing the SVD of an m×n matrix A.
 local f1 = {Abs='∣', Ceil='⌈', Disclose='⊃', Enclose='⊂', Exp='⋆', Define='∇',
   Execute='⍎', Fact='!', Floor='⌊', Length='≡', Ln='⍟', Unm='−', Not='∼',
   Pi='○', Recip='÷', Roll='?', Sign='×', Copy='+', Down='⍒', MatInv='⌹',
-  Pass='∘', Print='⎕', Range='⍳', Ravel=',', Reverse1='⊖', Reverse2='⌽',
+  Pass='∘', Range='⍳', Ravel=',', Reverse1='⊖', Reverse2='⌽',
   Shape='⍴', ToString='⍕', Transpose='⍉', Up='⍋'}
 
 local f2={Add='+', And='∧', Binom='!', Circ='○', Div='÷', Log='⍟', Max='⌈', 

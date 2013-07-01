@@ -430,7 +430,7 @@ _a=Mul(Range(Floor(Div(_a,Shape(_w)))),_a); _w[_a]=0; return _w </code></pre>
 2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97</code></pre>
 <h2 id="valence">Valence</h2>
 <p>In Lua, the number of arguments to a function is no big deal. You supply more arguments than the function was defined with? The others are ignored. You supply fewer arguments than the function was defined with? The missing ones are given the value <code>nil</code>. This behaviour lies at the very heart of the Lua way of thinking,</p>
-<p>In APL, the number of arguments to a function is absolutely central. Funtions are <em>niladic</em> (no arguments), <em>monadic</em> (one argument) or <em>dyadic</em> (two arguments). Lua⋆APL syntax does not make provision for niladic functions. Functions may be <em>ambivalent</em>, i.e. take either one or two arguments, deducible from the way the expression is formed, and in such a case may call different Lua functions.</p>
+<p>In APL, the number of arguments to a function is absolutely central. Funtions are <em>niladic</em> (no arguments), <em>monadic</em> (one argument) or <em>dyadic</em> (two arguments). At present, niladic functions can only be executed from Lua; Lua⋆APL syntax does not make provision for them. Functions may be <em>ambivalent</em>, i.e. take either one or two arguments, deducible from the way the expression is formed, and in such a case may call different Lua functions.</p>
 <p>The APL syntax allows the valence of a function to be determined from its context in the expression. Just like Lua knows the difference between unary minus and subtraction, APL knows the difference between monadic and dyadic use of a function symbol — in fact, about 20 APL symbols can be used for either a monadic or a dyadic function, and in almost all cases, those functions are implemented by different Lua functions.</p>
 <p>Operators are even more complicated. In principle there are numerous possibilities for the valence of an operator, its arguments and its result. The original APL operators solve the difficulty by taking only the valence of the operator into account, in effect treating the arguments and result as ambivalent.</p>
 <dl>
@@ -497,10 +497,8 @@ return Deal
 </dd>
 </dl>
 <p><code>⍎</code> (<code>Execute) ~   Does</code>Define` and returns the value of the function thus constructed after calling it with no arguments.</p>
+<p>'⍞<code>,</code>⎕<code>(</code>Read<code>,</code>Do<code>,</code>Print<code>) ~   These are not really functions from the APL point of view, they are     variables with special semantics.</code>⍞←x<code>causes the value</code>x<code>to be     printed;</code>⍞<code>as a variable means the string you will be prompted to     type in.</code>⎕←x<code>does the same as</code>⍞←x<code>;</code>⎕` as a variable means the result of executing the string you will be prompted to type in.</p>
 <dl>
-<dt><code>⎕</code> (<code>Print</code>)</dt>
-<dd><p>Returns its argument after printing it. (In some APL's this is a pseudo-variable to which you must assign; in Lua⋆APL it is a monadic function.)</p>
-</dd>
 <dt><code>lua</code></dt>
 <dd><p>Returns the Lua code to which a function has been compiled.</p>
 </dd>
@@ -560,6 +558,7 @@ return Deal
 <li><code>+</code> means that the two elements are alternatives, tried in left-to-right order</li>
 </ul>
 <p>For example, an expression can consist of just a single variable name (since a variable is a value, and a value is a left argument), but this possibility is only tried when all the other possibilities for an expression have failed.</p>
+<p>A simplified version of that grammar is given below. The full grammar, complete with compilation captures and special cases, is contained in the table <code>apl_expr</code> in the module file <code>lua.apl</code>.</p>
 <pre><code>statement = &#39;←&#39;*expr 
   + Param*&#39;←&#39;*expr 
   + Param*&quot;[&quot;*indices*&quot;]&quot;*&#39;←&#39;*expr

@@ -431,13 +431,19 @@ non-standard APL function `Rerank` has have been invented as an
 umbrella for them in library mode.
 
        help"⊂"
-    Enclose: ⊂⍵ makes an array of rows from a matrix
+    Enclose: ⊂⍵ makes an array of rows from a matrix or concatenates a vector.
+    Depends on _join.
        help"⊃"
-    Disclose: ⊃⍵ makes a matrix from an array of rows. Each ⍵[i] is treated as
-    a vector and padded to the maximum length using zeros or empty strings.
+    Disclose: ⊃⍵ makes a matrix from an array of rows, or a string vector from
+    a string. If ⍵ is a matrix, each ⍵[i] is treated as a vector and padded to 
+    the maximum length using zeros or empty strings. If ⍵ is a string, ⍵ is
+    split into substrings, depending on _split.
        help(Rerank)
     Rerank: Rerank(_w,_a): array of one rank higher (_a>0) or lower (_a<0),
        stacking rows (±1) or columns (±2). See Disclose/Enclose.
+
+The behaviour of `Enclose` and `Disclose` on strings is discussed under
+[Strings].
 
 ### Axis-dependent functions and operators
 
@@ -537,8 +543,14 @@ library.
        print(Each(frombytes)(M))
     ('The','quick','brown','fox')
 
-The `apl.util` library has some support for UTF-8. See [List of Lua⋆APL 
-functions].
+Lua⋆APL does have string arrays, and support for them is provided by the 
+functions `Disclose` and `Enclose`. These functions normally act 
+respectively on nested arrays and matrices, but `Disclose(str)` splits 
+a string into UTF-8 codepoints and `Enclose(vec)` concatenates a vector.
+More precisely, `Disclose` returns the result of `apl.util.utfchar`
+and `Enclose` the result of `table.concat`.
+
+This support can be customized: see [Splitting and joining].
 
 
 Global control variables
@@ -556,30 +568,33 @@ table.
   `_format`          Default format for monadic `Format`.
   --------------- -- --------------------------------------------------
 
-Comparison tolerance
-~   Lua⋆APL does a straightforward comparison only in the case of
-    functions that don't test for equality (`TestNE`, `TestGT`,
-    `TestLT`). Functions that give 1 in the equality case (`TestEq`,
-    `TestGE`, `TestLE`) actually test for approximate equality. 
-    Either of `abs(_a-_w)<apl._act` or `abs(_a-_w)<apl._rct*abs(_w)`
-    also counts as equality if the corresponding control variable is 
-    defined, 
+###Comparison tolerance
 
-    The philosophical implications are mind-blowing (`TestEq(x,y)` may
-    not give the same result as `TestEq(y,x)`, etc) but the practical
-    effect is that with the default settings, the equality tests do what
-    most sane people (that excludes numerical analysts, of course) 
-    expect them to. If you don't want them, you can always set those 
-    tolerances to zero or nil, or just do the complementary test 
-    (`1-TestNE(x,y)` etc).
+Lua⋆APL does a straightforward comparison only in the case of functions
+that don't test for equality (`TestNE`, `TestGT`, `TestLT`). Functions
+that give 1 in the equality case (`TestEq`, `TestGE`, `TestLE`) actually
+test for approximate equality. Either of `abs(_a-_w)<apl._act` or
+`abs(_a-_w)<apl._rct*abs(_w)` also counts as equality if the
+corresponding control variable is defined,
 
-           s=1/7; t=s+s+s+s+s+s+s; print(1==t)
-        false
-           print(TestGE(1,t))
-        1
-           apl._act=0; apl._rct=0
-           print(TestGE(1,t))
-        0
+The philosophical implications are mind-blowing (`TestEq(x,y)` may not
+give the same result as `TestEq(y,x)`, etc) but the practical effect is
+that with the default settings, the equality tests do what most sane
+people (that excludes numerical analysts, of course) expect them to. If
+you don't want them, you can always set those tolerances to zero or nil,
+or just do the complementary test (`1-TestNE(x,y)` etc).
+
+       s=1/7; t=s+s+s+s+s+s+s; print(1==t)
+    false
+       print(TestGE(1,t))
+    1
+       apl._act=0; apl._rct=0
+       print(TestGE(1,t))
+    0
+
+###Splitting and joining
+
+
 
 List of Lua⋆APL functions
 -------------------------

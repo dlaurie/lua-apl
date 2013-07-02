@@ -256,13 +256,17 @@ Each(f,x_w,x_a): (no APL equivalent) Fine-tune constant arguments.
 ./apl-lib.lua:497: bad argument #3 to &#39;both&#39; (shapes are incompatible)</code></pre>
 <p>A vector of vectors of the same length can be combined into a matrix, and a matrix can be converted to a nested array. These operations are so commonly needed that the APL2 notations <code>⊂</code> (Enclose) and <code>⊃</code> (Disclose) have been borrowed (but not with the exact same meaning), and the non-standard APL function <code>Rerank</code> has have been invented as an umbrella for them in library mode.</p>
 <pre><code>   help&quot;⊂&quot;
-Enclose: ⊂⍵ makes an array of rows from a matrix
+Enclose: ⊂⍵ makes an array of rows from a matrix or concatenates a vector.
+Depends on _join.
    help&quot;⊃&quot;
-Disclose: ⊃⍵ makes a matrix from an array of rows. Each ⍵[i] is treated as
-a vector and padded to the maximum length using zeros or empty strings.
+Disclose: ⊃⍵ makes a matrix from an array of rows, or a string vector from
+a string. If ⍵ is a matrix, each ⍵[i] is treated as a vector and padded to 
+the maximum length using zeros or empty strings. If ⍵ is a string, ⍵ is
+split into substrings, depending on _split.
    help(Rerank)
 Rerank: Rerank(_w,_a): array of one rank higher (_a&gt;0) or lower (_a&lt;0),
    stacking rows (±1) or columns (±2). See Disclose/Enclose.</code></pre>
+<p>The behaviour of <code>Enclose</code> and <code>Disclose</code> on strings is discussed under <a href="#strings">Strings</a>.</p>
 <h3 id="axis-dependent-functions-and-operators">Axis-dependent functions and operators</h3>
 <p>Several APL vector functions generalize to matrices by operating either on the rows or on the columns. In APL notation, the distinction is made by using different symbols (<code>⊖ ⌿ ⍀ ⍪</code> are the row-wise counterparts to <code>⌽ / \ ,</code>). There are typically three different functions at issue here.</p>
 <pre><code>   help(Attach)
@@ -313,7 +317,8 @@ Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵
 ({84,104,101},{113,117,105,99,107},{98,114,111,119,110},{102,111,120})
    print(Each(frombytes)(M))
 (&#39;The&#39;,&#39;quick&#39;,&#39;brown&#39;,&#39;fox&#39;)</code></pre>
-<p>The <code>apl.util</code> library has some support for UTF-8. See <a href="#list-of-luaapl-functions">List of Lua⋆APL functions</a>.</p>
+<p>Lua⋆APL does have string arrays, and support for them is provided by the functions <code>Disclose</code> and <code>Enclose</code>. These functions normally act respectively on nested arrays and matrices, but <code>Disclose(str)</code> splits a string into UTF-8 codepoints and <code>Enclose(vec)</code> concatenates a vector. More precisely, <code>Disclose</code> returns the result of <code>apl.util.utfchar</code> and <code>Enclose</code> the result of <code>table.concat</code>.</p>
+<p>This support can be customized: see <a href="#splitting-and-joining">Splitting and joining</a>.</p>
 <h2 id="global-control-variables">Global control variables</h2>
 <p>APL traditionally makes use of some control variables that affect its overall behaviour. Which these are, differs from one APL implementation to the next, so they are sometimes called &quot;system variables&quot;. In Lua⋆APL, their names start with an underscore, and they are stored in the module table.</p>
 <table>
@@ -335,9 +340,8 @@ Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵
 </tr>
 </tbody>
 </table>
-<dl>
-<dt>Comparison tolerance</dt>
-<dd><p>Lua⋆APL does a straightforward comparison only in the case of functions that don't test for equality (<code>TestNE</code>, <code>TestGT</code>, <code>TestLT</code>). Functions that give 1 in the equality case (<code>TestEq</code>, <code>TestGE</code>, <code>TestLE</code>) actually test for approximate equality. Either of <code>abs(_a-_w)&lt;apl._act</code> or <code>abs(_a-_w)&lt;apl._rct*abs(_w)</code> also counts as equality if the corresponding control variable is defined,</p>
+<h3 id="comparison-tolerance">Comparison tolerance</h3>
+<p>Lua⋆APL does a straightforward comparison only in the case of functions that don't test for equality (<code>TestNE</code>, <code>TestGT</code>, <code>TestLT</code>). Functions that give 1 in the equality case (<code>TestEq</code>, <code>TestGE</code>, <code>TestLE</code>) actually test for approximate equality. Either of <code>abs(_a-_w)&lt;apl._act</code> or <code>abs(_a-_w)&lt;apl._rct*abs(_w)</code> also counts as equality if the corresponding control variable is defined,</p>
 <p>The philosophical implications are mind-blowing (<code>TestEq(x,y)</code> may not give the same result as <code>TestEq(y,x)</code>, etc) but the practical effect is that with the default settings, the equality tests do what most sane people (that excludes numerical analysts, of course) expect them to. If you don't want them, you can always set those tolerances to zero or nil, or just do the complementary test (<code>1-TestNE(x,y)</code> etc).</p>
 <pre><code>   s=1/7; t=s+s+s+s+s+s+s; print(1==t)
 false
@@ -346,8 +350,7 @@ false
    apl._act=0; apl._rct=0
    print(TestGE(1,t))
 0</code></pre>
-</dd>
-</dl>
+<h3 id="splitting-and-joining">Splitting and joining</h3>
 <h2 id="list-of-luaapl-functions">List of Lua⋆APL functions</h2>
 <p>The current version may give a slightly different result, so do the following yourself. For most of these, you can get interactive help.</p>
 <pre><code>   help(apl)

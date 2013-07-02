@@ -7,7 +7,7 @@
 if _VERSION~="Lua 5.2" then error[[Lua⋆APL runs under Lua 5.2]]
 end
 
-local _VERSION = "Lua⋆APL 0.4.0"
+local _VERSION = "Lua⋆APL 0.4.1"
 _APL_LEVEL = _APL_LEVEL or 2
 
 -- You can set global _APL_LEVEL before requiring this module. 
@@ -48,8 +48,8 @@ end})
 
 -- forward declaration of util routines
 local all, argcheck, arr, both, checksize, checktype, compat, each,
-  filler, get, invert, iota, is, is_int, is_not, replace, rho, same, 
-  set, shape, singleton, start, sum, utfchar, utflen
+  filler, get, invert, iota, is, is_int, is_matrix, is_not, replace, 
+  rho, same, set, shape, singleton, start, sum, utfchar, utflen
 
           do --## local scope for util
 
@@ -114,6 +114,7 @@ get = core.get
 iota = core.iota
 is = function(typ) return function(x) return type(x)==typ end end
 is_int = core.is_int 
+is_matrix = function(A) local m,n=shape(A); return is_int(n) end
 is_not = function(typ) return function(x) return type(x)~=typ end end
 
 invert = function(_w) 
@@ -168,8 +169,8 @@ end
 
 util = {all=all, argcheck=argcheck, arr=arr, both=both, checksize=checksize,
   checktype=checktype, compat=compat, each=each, filler=filler, get=get,
-  invert=invert, iota=iota, is=is, is_int=is_int, is_not=is_not, 
-  replace=replace, rho=rho, same=same, set=set, shape=shape, 
+  invert=invert, iota=iota, is=is, is_int=is_int, is_matrix=is_matrix, 
+  is_not=is_not, replace=replace, rho=rho, same=same, set=set, shape=shape, 
   singleton=singleton, start=start, sum=sum }
 apl.util = util
 
@@ -259,7 +260,7 @@ local apl_expr = P { "statement";
    value = Vector/numbers + String/1 + Console/"Input'%1'"
       + (Var*'['*indices*']'/"%1[%2]" + Var)/"_V.%1" 
       + (Param*'['*indices*']'/"%1[%2]" + Param)/1;
-   index = expr+_s^0/"nil";
+   index = expr+_s^0/"'*'";
    indices = index*';'*index/"{%1;%2}" + index;
    }
 
@@ -755,6 +756,7 @@ Decode = function(_w,_a)
 end
 
 Disclose = function(_w) 
+   if is"string"(_w) then return (apl._split or utfchar)(_w) end 
    local m,n = shape(_w)
    argcheck(not n,1,"can't disclose a matrix")
    n=1
@@ -799,6 +801,7 @@ end
 
 Enclose = function(_w) -- make nested array from matrix rows
    local rows, cols = shape(_w)
+   if rows and not cols then return (apl._join or concat)(_w) end      
    argcheck(cols,1,"Expected a matrix","Enclose")
    local res=rho(0,rows)
    local i0=0
@@ -861,9 +864,9 @@ end
 local form = function(fmt,item)
    -- convert minus to  high    
    if is"table"(item) then return rawformat(item) end
-   if is"string"(_item) then 
-      if fmt:match"[efg]$" then fmt=fmt:match"%%%d+".."s" end
-   end
+   if is"string"(item) then if fmt:match"[efg]$" then 
+      fmt='%'..(fmt:match"%%(%d+)" or "").."s" 
+   end end
    item=format(fmt,item)
    if not fmt:match("^%%.*s$") then item=item:gsub('-','¯') end
    return item
@@ -889,6 +892,7 @@ Get = function(_w,_a)
       setmetatable(res,arr_meta)
       return res
    end
+   if _a=='*' then _a=iota(#_w) end
    local m,n = shape(_a)
    if not m then return core_index(_w,_a) end
    res=rho(0,m,n) 
@@ -1006,12 +1010,11 @@ Set = function(_w,_a,v)
       end
       return v
    end
-   if is"string"(_a) then 
-      error"Use rawset if you really can't do it with rho"
-   end
+   if _a==nil or _a=='*' then _a=iota(#_w) end
    if is_not"table"(_a) then error(
       "Index '"..tostring(_a).."' is out of range, table length is "..#_w)
    end
+   if is"string"(_a) then error("Use rawset to set '".._a.."'") end
    local n=#_a
    if v_tbl then for k=1,n do _w[_a[k]]=v[k] end
    else for k=1,n do _w[_a[k]]=v end
@@ -1074,8 +1077,10 @@ local helptext = {
 [Decode] = "Decode: ⍵⊤⍺ → Decompose ⍺ into base ⍵ digits";
 [Down] = "Down: ⍒⍵ → the permutation that grades ⍵ downwards";
 [Disclose] = [[
-Disclose: ⊃⍵ makes a matrix from an array of rows. Each ⍵[i] is treated as
-a vector and padded to the maximum length using zeros or empty strings.]];
+Disclose: ⊃⍵ makes a matrix from an array of rows, or a string vector from
+a string. If ⍵ is a matrix, each ⍵[i] is treated as a vector and padded to 
+the maximum length using zeros or empty strings. If ⍵ is a string, ⍵ is
+split into substrings, depending on _split.]];
 [Drop] = "Drop: ⍺↓⍵ → ⍵ without its first ⍺ or last -⍺ elements";
 [Each] = [[
 Each(f): f¨ → make a term-by-term function from f
@@ -1083,7 +1088,9 @@ Each(f,x_w,x_a): (Lua mode only) Fine-tune constant arguments.
    x_w=x_a=0: the shapes of _w and _a must be compatible.
    x_w=1, x_a=1: _w,_a may be a singleton, which will be used every time.
    x_w=2, x_a=2: _w,_a is used as such every time even if it is a table.]];  
-[Enclose] = "Enclose: ⊂⍵ makes an array of rows from a matrix";
+[Enclose] = [[
+Enclose: ⊂⍵ makes an array of rows from a matrix or concatenates a vector.
+Depends on _join.]];
 [Encode] = "Encode: ⍵⊥⍺ → ⍺ considered as base ⍵ digits of result";
 [Expand] = 
 [[Expand(⍵,⍺): ⍺\⍵ → inserts neutral elements into ⍵ as counted by ⍺]];
@@ -1123,14 +1130,14 @@ local lib,f1,f2,op1=apl.lib,apl.f1,apl.f2,apl.op1
 
 local attach,    compress,    expand,    reduce,    reverse,    rotate,    scan
 = lib.Attach,lib.Compress,lib.Expand,lib.Reduce,lib.Reverse,lib.Rotate,lib.Scan
-local decode,   drop,   encode,   take,vecformat
- = f2.Decode,f2.Drop,f2.Encode,f2.Take,f2.Format 
-local rawformat=f1.ToString
+local decode,   drop,   encode,   matdiv,   take,vecformat
+ = f2.Decode,f2.Drop,f2.Encode,f2.MatDiv,f2.Take,f2.Format 
+local matinv,rawformat = f1.MatInv,f1.ToString
 local Each = op1.Each
 local Disclose,   Enclose,   Transpose =
    f1.Disclose,f1.Enclose,f1.Transpose
-local Add,    Mul,    Div,    Same,    TestEq,  vecget,  vecset = 
-   f2.Add, f2.Mul, f2.Div, f2.Same, f2.TestEq, lib.Get, lib.Set
+local Add,    Mul,    Div,    Reshape,    Same,    TestEq,  vecget,  vecset = 
+   f2.Add, f2.Mul, f2.Div, f2.Reshape, f2.Same, f2.TestEq, lib.Get, lib.Set
 local Outer=apl.Outer
 
 local Attach,Attach1,Attach2, Compress1,Compress2, Expand1,Expand2, 
@@ -1259,8 +1266,8 @@ Get = function(_w,_a)
    if is"number"(i) and is"number"(j) then scalar=true end
    if is"number"(i) then i={i}; submat=false end
    if is"number"(j) then j={j}; submat=false end
-   if i==nil then i=iota(rows) end
-   if j==nil then j=iota(cols) end
+   if i==nil or i=='*' then i=iota(rows) end
+   if j==nil or j=='*' then j=iota(cols) end
    local l,m,n = 0,#i,#j
    local res
    if submat then res=rho(0,m,n) else res=rho(0,m*n) end   
@@ -1276,6 +1283,7 @@ end
 
 MatInv = function(A)
    checktype(A,'table',1,"MatInv")
+   if not is_matrix(A) then return matinv(A) end
    local M=SVD(A)
    local S = M.S
    local i=iota(numrank(S))
@@ -1284,6 +1292,7 @@ MatInv = function(A)
 end
 
 MatDiv = function(A,b)
+   if not (is_matrix(A) or is_matrix(b)) then return matdiv(A,b) end
    checktype(b,"table",2,"MatDiv")
    checksize(b,A,2,"MatDiv")
    return Inner(Add,Mul)(b,MatInv(A))
@@ -1323,8 +1332,8 @@ Set = function(_w,_a,v)
    local i,j,submat = _a[1], _a[2], true
    if is"number"(i) then i={i}; submat=false end
    if is"number"(j) then j={j}; submat=false end
-   if i==nil then i=iota(rows) end
-   if j==nil then j=iota(cols) end
+   if i==nil or i=='*' then i=iota(rows) end
+   if j==nil or j=='*' then j=iota(cols) end
    if is"table"(_v) then
       local l=0
       for k in indices(cols,i,j) do l=l+1; _w[k]=v[l] end
@@ -1486,7 +1495,7 @@ end
 arr_meta.__index = apl.lib.Get
 arr_meta.__newindex = apl.lib.Set
 
-apl._act=1/bit32.lshift(1,24)^2
+apl._act=2^-48
 apl._rct=apl._act
 
 help("APL",help(apl_dict,0))
@@ -1500,8 +1509,10 @@ Circle functions. Assuming that arguments are in range:
    (1 2 3 ○ ⍵) = (sin ⍵, cos ⍵, tan ⍵)
    (5 6 7 ○ ⍵) = (sinh ⍵, cosh ⍵, tanh ⍵)
   (⍺ ○ (-⍺) ⍵) = ⍵ ]])
-help("_act","_act: absolute comparison tolerance")
-help("_rct","_rct: relative comparison tolerance")
+help("_act","_act: absolute comparison tolerance, default 2^-48")
+help("_rct","_rct: relative comparison tolerance, default 2^-48")
+help("_join","_join: vector join function, default string.concat")
+help("_split","_split: string splitter, default apl.util.utfchar")
 help("_format","_format: default format, 'raw' means no prettyprinting")
 help("start",[[
     help(apl)         -- displays keys in table `apl`

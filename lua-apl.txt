@@ -566,6 +566,8 @@ table.
   `_act`             Absolute comparison tolerance.
   `_rct`             Relative comparision tolerance.
   `_format`          Default format for monadic `Format`.
+  `_split`           String splitting function.
+  `_join`            Table concatenation function.
   --------------- -- --------------------------------------------------
 
 ###Comparison tolerance
@@ -594,7 +596,15 @@ or just do the complementary test (`1-TestNE(x,y)` etc).
 
 ###Splitting and joining
 
+The routines called by `Disclose` and `Enclose` for splitting and joining
+by default are `apl.util.utfchar` and `table.concat` respectively. You can
+change that by setting your own monadic functions in the global control
+variables `apl._split` and `apl._join`; to revert to default, set them to 
+`nil`.
 
+`_split` is only called when `Disclose` receives a string; `_join` is
+called for any table that is not a matrix, and the usual Lua coercion
+of numbesr to strings will be applied.
 
 List of Lua⋆APL functions
 -------------------------

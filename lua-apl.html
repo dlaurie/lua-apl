@@ -338,6 +338,16 @@ Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵
 <td align="left"></td>
 <td align="left">Default format for monadic <code>Format</code>.</td>
 </tr>
+<tr class="even">
+<td align="left"><code>_split</code></td>
+<td align="left"></td>
+<td align="left">String splitting function.</td>
+</tr>
+<tr class="odd">
+<td align="left"><code>_join</code></td>
+<td align="left"></td>
+<td align="left">Table concatenation function.</td>
+</tr>
 </tbody>
 </table>
 <h3 id="comparison-tolerance">Comparison tolerance</h3>
@@ -351,6 +361,8 @@ false
    print(TestGE(1,t))
 0</code></pre>
 <h3 id="splitting-and-joining">Splitting and joining</h3>
+<p>The routines called by <code>Disclose</code> and <code>Enclose</code> for splitting and joining by default are <code>apl.util.utfchar</code> and <code>table.concat</code> respectively. You can change that by setting your own monadic functions in the global control variables <code>apl._split</code> and <code>apl._join</code>; to revert to default, set them to <code>nil</code>.</p>
+<p><code>_split</code> is only called when <code>Disclose</code> receives a string; <code>_join</code> is called for any table that is not a matrix, and the usual Lua coercion of numbesr to strings will be applied.</p>
 <h2 id="list-of-luaapl-functions">List of Lua⋆APL functions</h2>
 <p>The current version may give a slightly different result, so do the following yourself. For most of these, you can get interactive help.</p>
 <pre><code>   help(apl)

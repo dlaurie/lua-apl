@@ -32,18 +32,19 @@ Lua mode:
 
         apl"(n,n)⍴(n+1)↑1"()
 
-    The APL compiler translates this to the string of calls shown
-    above.
+    The `apl` function invokes an APL compiler to translate this to 
+    the string of calls shown above.
 
 APL mode: 
-~   Bare APL code can be entered directly at the terminal,
-    mixed with Lua code. You type in APL commands like:
+~   Bare APL code can be entered directly at the terminal. You type 
+    in a mixture of Lua and APL commands like:
 
+        n=10
         (n,n)⍴(n+1)↑1
 
-    The APL interpreter decides this must be APL code and modifies it
-    to the Lua mode code shown above. If it seems to be Lua code, the
-    interpreter does not do the translation.
+    The APL interpreter decides the second line must be APL code and 
+    modifies it to the Lua mode code shown above. If it seems to be Lua 
+    code, the interpreter does not do the translation.
 
     This works because APL code has such a distinctive appearance. Even 
     a primitive guessing algorithm can identify APL code with a high 
@@ -85,12 +86,22 @@ still change.
 Library mode
 ============
 
+In this mode, APL is a distant inspiration only, but since the other
+modes make use of it, it is documented quite extensively here.
+
+Actually, I do not expect anybody to stop at library mode, but it
+is the easiest place to start for Lua programmers who do not know any
+APL; eventually one needs know about it, if only because some library
+functions have optional extra parameters that are fixed at default 
+values when called from APL. It is best learnt in an interactive session 
+because an extensive amount of interactive help is available.
+
 I'm assuming you loaded the module by 
 
        apl=require'apl'
        apl:import'*'
 
-That call to `apl:import` adds the 70-plus items of the module to the
+That call to `apl:import` adds the 90-plus items of the module to the
 global environment. Almost all of them are quite distinctively named,
 but if you instinctively recoil in horror, muttering "pollution" under
 your breath, by all means omit that line and prepare to type numerous
@@ -102,12 +113,7 @@ A thorough knowledge of what the library offers is not needed if you
 already know APL and plan to use mostly APL mode. If you already know
 APL, by all means skip straight to [APL mode] and only read this part
 later. If you don't want to build the APL interpreter, skip to [Lua
-mode]. Actually, I do not expect anybody to stop at library mode, but it
-is the easiest place to start for Lua programmers who do not know any
-APL; eventually one needs know about it, if only because some library
-functions have optional extra parameters that are fixed at default 
-values when called from APL. It is best learnt in an interactive session 
-because an extensive amount of interactive help is available.
+mode]. 
 
 The module `apl` loads a C module `apl_core`, documented in the 
 Programmer's Guide. 
@@ -141,7 +147,7 @@ notation and APL infix notation, for example:
    `Div(_w,_a)`           `⍺÷⍵`
  ------------------- -- -----------------
 
-In total, over 70 of these functions are provided in library mode. The 
+In total, over 90 of these functions are provided in library mode. The 
 APL symbols used for them, even those which in Lua denote arithmetic 
 operators, must be thought of as names, not as as special characters,
 even though those names are not used in library mode. 
@@ -186,8 +192,8 @@ three-byte names that only look like a single character thanks to UTF-8),
 there is no notion of precedence, and "operator" means a function that 
 acts on functions.
 
--   APL functions are Lua functions of two variables, returning one
-    return value. In the documentation, the names `⍺,⍵` and `_a,_w` 
+-   APL functions are Lua functions of one or two variables, returning 
+    one value. In the documentation, the names `⍺,⍵` and `_a,_w` 
     are used respectively when the function is called from APL or from
     Lua.  The _left_ argument `⍺` in APL infix notation becomes the 
     _second_ argument `_a` in Lua postfix notation. In APL, the parser
@@ -208,12 +214,15 @@ acts on functions.
      
     4. Operators have a higher priority than functions.
 
--   APL arrays (vectors and matrices both) are Lua index-1 tables. The 
-    ordering of matrix elements is row-wise. More on this in a while.
+-   APL scalars are Lua numbers and strings. Other Lua types are treated
+    as scalar. In particular, a Lua function can be an APL scalar. 
+    APL needs to be told at the lexical level (via `register`) which
+    names will be used to denote functions.
 
--   APL scalars are Lua numbers and strings. Other Lua types are 
-    treated as scalar. In particular, a Lua function is an APL scalar. 
-    This point, too, will be elaborated on.
+-   APL arrays (vectors and matrices both) are Lua index-1 tables. The 
+    ordering of matrix elements is row-wise. Lua⋆APL arrays do not have
+    a type as in classic APL: each element is a Lua value and carries
+    its own type. In particular, an empty array has no type.
 
 APL arrays share a common metatable, which provides `__tostring`,
 `__index` `__newindex` and `__lt` (the last of these does a
@@ -236,7 +245,7 @@ not recommended, and never necessary, for two reasons:
 -   In almost all cases, the APL library will accept a Lua table as 
     a substitute for an APL vector.
 -   All tables returned by the library are APL arrays. In particular,
-    the function `Copy` will convert a Lua  to an APL array.
+    the function `Copy` will convert a Lua array to an APL array.
 
 For example, to define a matrix (see [Formatting] for `_format`)
 one calls `Reshape` with a Lua table and the desired shape as
@@ -251,7 +260,7 @@ arguments; to convert it to an APL vector one calls `Ravel`.
 
 The _rank_ of an array is the number of indices it takes to reference
 an element from it. APL allows rank 0 (scalar), rank 1 (vector) and 
-rank (matrix). APL does not distinguish between row vectors and column
+rank 2 (matrix). APL does not distinguish between row vectors and column
 vectors; if you need to do that, use a one-row or one-column matrix.
 
 `Shape` is the APL analogue of Lua's `type`, defined as follows:
@@ -309,7 +318,7 @@ The whole point of using APL is so that one never (well, hardly ever)
 needs to use an explicit table index. The vast majority of its functions
 accept array arguments and return array values.
 
-The APL library handles nil arguments gracefully in the case of all
+The APL library handles nils in a table gracefully in the case of all
 scalar functions (i.e. functions that apply term-by-term to array
 arguments).
 
@@ -899,25 +908,28 @@ define new operators, use a different APL name (which need not be
 a valid Lua name) from the Lua name), and define help. 
 See `help(apl.register)`.
 
-Functions added at compiler level
----------------------------------
+Some functions that interact with the compiler
+----------------------------------------------
 
-The first four of these functions are almost-standard APL functions, 
-but Lua⋆APL uses them in subtly different ways, so we documemt them 
-fully here.
+Note that `←` and `∇` are used in a non-standard way.
 
 `←` (`Assign`)
 ~   Returns its right argument after assigning it to the left argument.
     This can be used inside expressions, except when the left argument
     is a parameter (`⍺` or `⍵`). In that case, it must occur at the
     very start of the expression.  When used monadically (also only 
-    allowed at the start of an expression), returns from the whole APL 
-    function.
+    allowed at the start of an expression), `←` forces a `return`
+    instruction to be generated. 
+
+    If the right argument is a Lua function, `Assign` registers it for
+    use as a function in APL expressions under the name specified by the
+    left argument.
 
 `∇` (`Define`)
-~   This is the only APL function that returns a function as a 
-    first-class value. It can take either a string (which is then 
-    compiled) or a function (which is simply returned). 
+~   This is the only Lua⋆APL function that 
+    returns a Lua function as a first-class value. It can take either 
+    a string (which is then compiled) or a function (which is simply 
+    returned). 
 
            =Deal(100,10)  
         Your APL system is now stoned
@@ -934,12 +946,12 @@ fully here.
 ~   Does `Define` and returns the value of the function thus constructed
     after calling it with no arguments.
 
-'⍞`,`⎕` (`Read`,`Do`,`Print`)
-~   These are not really functions from the APL point of view, they are
-    variables with special semantics. `⍞←x` causes the value `x` to be
-    printed; `⍞` as a variable means the string you will be prompted to
-    type in. `⎕←x` does the same as `⍞←x`; `⎕` as a variable means the
-    result of executing the string you will be prompted to type in.
+`⍞`,`⎕` (`Read`,`Do`,`Print`)
+~   Although implemented as Lua functions, these are not really functions 
+    from the APL point of view, they are variables with special semantics. 
+    `⍞←x` or `⎕←x` causes the value `x` to be printed. When used as
+    a value, not being assigned to, `⍞` stands for the string you will 
+    be prompted to type in and `⎕` for the result of executing that string.
     
 `lua`
 ~   Returns the Lua code to which a function has been compiled.

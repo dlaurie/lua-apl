@@ -242,7 +242,7 @@ local apl_expr = P { "statement";
    statement = (_s^0*P'←'*expr)/"return %1" 
      + Param/1*'←'*expr/"%1=%2" 
      + Param/1*"["*indices*"]"*'←'*expr/"%1[%2]=%3"
-     + expr;
+     + _s^0*expr;
    expr = '∇'*func_expr
      + Console*'←'*expr/"Print(%2)"
      + Var*'←'*expr/"Assign(%2,'%1')" 
@@ -348,8 +348,8 @@ load_apl = function(_w)
    checktype(_w,'string',1)
    _w = _w:gsub("⍝[^\n]+"," "):gsub("\n"," ")  -- strip off APL comments
    local lua = apl2lua(_w)
-   if select(2,_w:gsub('⋄',''))==0 and not assignment:match(_w) 
-      then lua="return "..lua end
+   if select(2,_w:gsub('⋄',''))==0 and not assignment:match(_w) and not
+      lua:match"^return" then lua="return "..lua end
    local f,msg = load(preamble..lua,nil,nil,APL_ENV)
    if not f then 
       error("Could not compile: ".._w.."\n Tried: "..lua.."\n"..msg) 
@@ -359,7 +359,7 @@ load_apl = function(_w)
 end
 
 local function lua_code(_w)
--- Display Lua code of a function
+--- lua(f): Lua code of function f
    if is"function"(_w) then 
       local source = debug.getinfo(_w).source
       if source:sub(1,#preamble)==preamble then 
@@ -376,7 +376,7 @@ apl.register = register
 help('method',nil)
 
 apl.help = function(topic,...)
--- Displays brief documentation of a function or a predefinedtopic; 
+--- Displays brief documentation of a function or a predefined topic; 
 -- lists keys of a table. Examples are given in `help"start"`.
    local h={}
    local dict=apl_dict[topic]
@@ -401,6 +401,7 @@ util.utfchar, util.utflen = utfchar, utflen
 local register = apl.register
 
 apl.import = function(apl,names)
+--- apl:import(names): import names into _ENV
    if not is"table"(apl) then
       print"Did you say `apl.import` instead of `apl:import`?"
       return
@@ -585,6 +586,11 @@ ToString = function(_w)
       local cols = rawget(_w,'cols')
       local data = {}
       local n = #_w
+      if n==0 then 
+         if cols then return ('%d %d⍴0'):format(shape(_w)) 
+         else return ('%d⍴0'):format(n)
+         end
+      end
       local L,R
       if getmetatable(_w) then 
          if cols then L,R = '[',']' else L,R = '(',')' end
@@ -658,10 +664,10 @@ Range: ⍳⍵ → first ⍵ integers starting at 1
 [Sub] = "Sub: ⍺-⍵ → Lua's _a-_w";
 [TestEq] = "TestEq: ⍺=⍵ → 1 if ⍺ equals ⍵ within tolerance, else 0";
 [TestGE] = "TestGE: ⍺≥⍵ → 1 if ⍺>⍵ or ⍺ equals ⍵ within tolerance, else 0";
-[TestGT] = "TestGT: ⍺>⍵ → Lua's _a>_w";
+[TestGT] = "TestGT: ⍺>⍵ → 1 if ⍺>⍵, else 0";
 [TestLE] = "TestLE: ⍺≤⍵ → 1 if ⍺<⍵ or ⍺ equals ⍵ within tolerance, else 0";
-[TestLT] = "TestLT: ⍺<⍵ → Lua's _a<_w";
-[TestNE] = "TestNE: ⍺≠⍵ → Lua's _a~=_w";
+[TestLT] = "TestLT: ⍺<⍵ → 1 if ⍺<⍵, else 0";
+[TestNE] = "TestNE: ⍺≠⍵ → 1 if ⍺ unequal to ⍵, else 0";
 [ToString] = "ToString: ⍕⍵ → string representation of ⍵";
 [Unm] = 'Unm: -⍵ → unary minus (negative of ⍵)';
 }
@@ -729,7 +735,7 @@ end
 Copy = function(_w) 
    if is_not"table"(_w) then return _w end
    local res=rho(0,shape(_w))
-   set(res,1,nil,unpack(_w)) 
+   if #_w>0 then set(res,1,nil,unpack(_w)) end
    return res
 end
 
@@ -793,6 +799,7 @@ Each = function(f,ex1,ex2)
    if ex1==nil then ex1=1 end
    if ex2==nil then ex2=1 end
    return function(_w,_a) 
+      if #_w==0 or #_a==0 then return arr{} end
       if _a then return both(f,_w,_a,ex1,ex2)
       else return each(f,_w) 
       end 
@@ -873,15 +880,21 @@ local form = function(fmt,item)
 end
 
 Format = function(_w,_a)
+--- Format vectors; reverts to ToString if given a matrix
    if _w==nil then return "_" end   
    if is"string"(_w) then return _w end
    if not(_w==_w) then return "NaN" end
-   _a = _a and each(aplformat,_a) or apl._format 
-   if _a=="raw" then return rawformat(_w) end   
-   _a = _a or "%.7g"
-   if is"table"(_w) then return concat(Each(form)(_a,_w),' ') end
-   return _a:format(_w)
-end   
+-- obtain Lua format
+   _a = _a and each(aplformat,_a) or apl._format or "%.7g"
+   if _a=="raw" then return rawformat(_w) end
+-- 
+   local m,n = shape(_w) 
+   if not m then 
+      if is"number"(_w) then return _a:format(_w) else return tostring(_w) 
+   end end
+   if m==0 or n then return rawformat(_w) end
+   return concat(Each(form)(_a,_w),' ') 
+end      
 
 Get = function(_w,_a)
    checktype(_w,'table',1)
@@ -1029,7 +1042,7 @@ end
 Take = function(_w,_a)
    if _a<0 then return Reverse(Take(Reverse(_w),-_a)) end
    if is_not"table"(_w) then _w={_w} end
-   return set(rho(0,_a),1,min(_a,#_w),unpack(_w))
+   return set(rho(filler(_w),_a),1,min(_a,#_w),unpack(_w))
 end
     
 Transpose = function(_w)
@@ -1078,9 +1091,9 @@ local helptext = {
 [Down] = "Down: ⍒⍵ → the permutation that grades ⍵ downwards";
 [Disclose] = [[
 Disclose: ⊃⍵ makes a matrix from an array of rows, or a string vector from
-a string. If ⍵ is a matrix, each ⍵[i] is treated as a vector and padded to 
-the maximum length using zeros or empty strings. If ⍵ is a string, ⍵ is
-split into substrings, depending on _split.]];
+   a string. If ⍵ is a matrix, each ⍵[i] is treated as a vector and padded
+   to the maximum length using zeros or empty strings. If ⍵ is a string, 
+   ⍵ is split into substrings, depending on _split.]];
 [Drop] = "Drop: ⍺↓⍵ → ⍵ without its first ⍺ or last -⍺ elements";
 [Each] = [[
 Each(f): f¨ → make a term-by-term function from f
@@ -1090,7 +1103,7 @@ Each(f,x_w,x_a): (Lua mode only) Fine-tune constant arguments.
    x_w=2, x_a=2: _w,_a is used as such every time even if it is a table.]];  
 [Enclose] = [[
 Enclose: ⊂⍵ makes an array of rows from a matrix or concatenates a vector.
-Depends on _join.]];
+   Depends on _join.]];
 [Encode] = "Encode: ⍵⊥⍺ → ⍺ considered as base ⍵ digits of result";
 [Expand] = 
 [[Expand(⍵,⍺): ⍺\⍵ → inserts neutral elements into ⍵ as counted by ⍺]];
@@ -1132,7 +1145,7 @@ local attach,    compress,    expand,    reduce,    reverse,    rotate,    scan
 = lib.Attach,lib.Compress,lib.Expand,lib.Reduce,lib.Reverse,lib.Rotate,lib.Scan
 local decode,   drop,   encode,   matdiv,   take,vecformat
  = f2.Decode,f2.Drop,f2.Encode,f2.MatDiv,f2.Take,f2.Format 
-local matinv,rawformat = f1.MatInv,f1.ToString
+local Copy,matinv,rawformat = f1.Copy,f1.MatInv,f1.ToString
 local Each = op1.Each
 local Disclose,   Enclose,   Transpose =
    f1.Disclose,f1.Enclose,f1.Transpose
@@ -1203,25 +1216,22 @@ local numrank=function(S)
 end
 
 Attach = function(_w,_a,axis)
-   local res   
-   if is_not"table"(res) then res=arr(_a) else res=Copy(_a) end
-   if is_not"table"(_w) then _w={_w} end
-   if #_w==0 then return res end
-   if not axis then
-      local l,m=#res,#_w
-      rawset(res,'cols',nil); rawset(res,'rows',nil)
-      rawset(res,'apl_len',l+m)
-      return set(res,l+1,nil,get(_w,1,m))
+   if is_not"table"(_a) then _a=arr(_a) else _a=Copy(_a) end
+   if is_not"table"(_w) then _w=arr{_w} end
+   local m1,n1=shape(_a)
+   local m2,n2=shape(_w)
+   local n=max(n1 or 0,n2 or 0)
+   if not (axis and n>0) then return attach(_w,_a) end
+   if axis==1 then 
+      if m1==0 then return Take(_w,max(1,m2 or 0,n)) 
+      elseif m2==0 then return Take(_a,max(1,m1 or 0),n)
+      end
    end
-   if res.cols then res=Rerank(res,-axis,'Attach') 
-      elseif axis==1 then res={res}
-   end
-   if _w.cols then _w=Rerank(_w,-axis,'Attach') 
-      elseif axis==1 then _w={_w}
-   end
-   local l,m=#res,#_w
-   rawset(res,'apl_len',l+m)
-   return Rerank(set(res,l+1,nil,get(_w,1,m)),axis)
+   if n1 then _a=Rerank(_a,-axis,'Attach') elseif axis==1 then _a=arr{_a} end
+   if n2 then _w=Rerank(_w,-axis,'Attach') elseif axis==1 then _w=arr{_w} end
+   local l,m=#_a,#_w
+   rawset(_a,'apl_len',l+m)
+   return Rerank(set(_a,l+1,nil,get(_w,1,m)),axis)
 end
 
 Decode = function(_w,_a)
@@ -1241,6 +1251,7 @@ Encode = function(_w,_a) return inner(encode,_w,_a) end
 
 local function autoformat(x)
 --- compute ideal width for column
+   if #x==0 then return rho(0,0) end
    if all(is_int,x) then x=each(tostring,x) end
    if all(is"string",x) then return Reduce2(max)(each(rawlen,x)) end
    return -16.7
@@ -1248,7 +1259,7 @@ end
 
 Format = function(_w,_a)
    local m,n = shape(_w)
-   if not n then return vecformat(_w,_a) end
+   if not n or #_w==0 then return vecformat(_w,_a) end
    _a = _a or apl._format 
    if same(_a,'raw') then return rawformat(_w) end
    _a = _a or each(autoformat,Rerank(_w,-2))
@@ -1379,26 +1390,6 @@ Rotate2 = function(_w,_a) return Rotate(_w,_a,2) end;
 Scan1=function(f) return along(scan(f),1,'Scan') end;
 Scan2=function(f) return along(scan(f),2,'Scan') end;
 
-local helptext = {
-[Attach1] = "Attach1(⍵,⍺): ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵";
-[Attach2] = "Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵";
-[Compress1] = "Compress1(⍵,⍺): ⍺⌿⍵ → copies rows of ⍵ as counted by ⍺";
-[Compress2] = "Compress2(⍵,⍺): ⍺/⍵ → copies columns of ⍵ as counted by ⍺";
-[Expand1] = "Expand1(⍵,⍺): ⍺⍀⍵ → inserts neutral rows into ⍵ as counted by ⍺";
-[Expand2] = "Expand2(⍵,⍺): ⍺\\⍵ → inserts neutral columns ⍵ as counted by ⍺";
-[Reduce1] = "Reduce1(⍵,⍺): ⍺⌿⍵ → copies rows of ⍵ as counted by ⍺";
-[Reduce2] = "Reduce2(⍵,⍺): ⍺/⍵ → copies columns of ⍵ as counted by ⍺";
-[Reverse1] = "Reverse1(⍵): ⊖⍵ → rows of ⍵ in reverse order";
-[Reverse2] = "Reverse2(⍵): ⌽⍵ → columns of ⍵ in reverse order";
-[Rotate1] = 
-"Rotate1(⍵,⍺): ⍺⊖⍵ → elements in columns of ⍵ rotated up by ⍺ or down by -⍺";
-[Rotate2] = 
-"Rotate2(⍵,⍺): ⍺⌽⍵ → elements in rows of ⍵ rotated left by ⍺ or right by -⍺";
-[Scan1] = "Scan1(f): f⌿⍵ → scan over rows";
-[Scan2] = "Scan2(f): f⌿⍵ → scan over columns";
-}
-for k,v in pairs(helptext) do help(k,v) end
-
 local lib={Get=Get,Set=Set,Rerank=Rerank,SVD=SVD}
 local f1={Down=Down, MatInv=MatInv, Ravel=Ravel, Reverse1=Reverse1, 
    Reverse2=Reverse2}
@@ -1418,10 +1409,30 @@ replace(apl.op1,op1,apl.rank1.op1)
 replace(apl.op2,op2,apl.rank1.op2)
 
 for class,group in pairs(apl.rank1) do -- copy over help for new function
-   for k,v in pairs(group) do 
-      if not help(apl[class][k],0) then help(apl[class][k],help(v,0)) end
-   end
+   for k,v in pairs(group) do help(apl[class][k],help(v,0)) end
 end
+
+local helptext = {
+[Attach1] = "Attach1(⍵,⍺): ⍺⍪⍵ → rows of ⍺ followed by rows of ⍵";
+[Attach2] = "Attach2(⍵,⍺): ⍺,⍵ → columns of ⍺ followed by columns of ⍵";
+[Compress1] = "Compress1(⍵,⍺): ⍺⌿⍵ → copies rows of ⍵ as counted by ⍺";
+[Compress2] = "Compress2(⍵,⍺): ⍺/⍵ → copies columns of ⍵ as counted by ⍺";
+[Expand1] = "Expand1(⍵,⍺): ⍺⍀⍵ → inserts neutral rows into ⍵ as counted by ⍺";
+[Expand2] = "Expand2(⍵,⍺): ⍺\\⍵ → inserts neutral columns ⍵ as counted by ⍺";
+[Format] = "Format: ⍺⍕⍵ → format ⍵ according to ⍺, see User's Manual";
+[Inner] = "Inner(f,g): f.g → a dyadic function returning f/⍺ g ⍵.";
+[Reduce1] = "Reduce1(⍵,⍺): ⍺⌿⍵ → copies rows of ⍵ as counted by ⍺";
+[Reduce2] = "Reduce2(⍵,⍺): ⍺/⍵ → copies columns of ⍵ as counted by ⍺";
+[Reverse1] = "Reverse1(⍵): ⊖⍵ → rows of ⍵ in reverse order";
+[Reverse2] = "Reverse2(⍵): ⌽⍵ → columns of ⍵ in reverse order";
+[Rotate1] = 
+"Rotate1(⍵,⍺): ⍺⊖⍵ → elements in columns of ⍵ rotated up by ⍺ or down by -⍺";
+[Rotate2] = 
+"Rotate2(⍵,⍺): ⍺⌽⍵ → elements in rows of ⍵ rotated left by ⍺ or right by -⍺";
+[Scan1] = "Scan1(f): f⌿⍵ → scan over rows";
+[Scan2] = "Scan2(f): f⌿⍵ → scan over columns";
+}
+for k,v in pairs(helptext) do help(k,v) end
 
 help(Rerank, [[
 Rerank(_w,_a): array of one rank higher (_a>0) or lower (_a<0), stacking 

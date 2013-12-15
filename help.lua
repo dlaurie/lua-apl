@@ -1,8 +1,10 @@
---- help.lua (c) Dirk Laurie 2013, Lua-style MIT license
+--- ihelp.lua (c) Dirk Laurie 2013, Lua-style MIT license
+-- Lua interactive help. 
+--
 -- To get started:
 --
---$ lua -l help
---help()
+-- $ lua -e "help = require'ihelp'"
+-- help()
 
 do
 -- sample shorthelp and longhelp
@@ -115,17 +117,15 @@ local docstring = function(fct)
    return helptext 
 end
 
-local function utflen(s)
-   return #s:gsub("[\xC0-\xEF][\x80-\xBF]*",'.')
-end
+-- assumes validity of UTF8 encoding
+local function utflen(s) return #s:gsub("[\192-\239][\128-\191]*",'.') end
 
 local fold
 fold = function(s)
---- Primitive word-wrap function. If you want to use it independently, 
--- remove the line declaring it to be local.
+--- Primitive word-wrap function. 
   if utflen(s)<=72 then return s end
   local n=74
-  while n>60 do n=n-1; if s:sub(n,n):match"%s" then break end end
+  while n>60 do n=n-1; if s:find("^%s",n) then break end end
   return s:sub(1,n-1)..'\n    '..fold(s:sub(n+1))
 end  
 
@@ -139,18 +139,16 @@ local topics = function (tbl,prefix)
 end
 
 local help = function(fct,...)
----    help(fct)
--- none: Prints short help. 
--- function: Prints the docstring of `fct`, if any.
--- table: Prints `help` field, if any; else contents.
--- string: Prints help on the topic, if any.
--- "all": Prints available topics.
---     help(topic,false)
--- Removes topic from "all"
---     help(fct,"newhelp")
--- Redefines what you will get from `help(fct)`
---     help(fct,0)
--- (or anything else) don't print help, return it instead 
+---    help(), help(arg), help(arg1,arg2)
+-- help(): Prints short help. 
+-- help(function): Prints the docstring of `arg`, if any.
+-- help(table): Prints `help` field, if any; else contents.
+-- help(string): Prints help on the topic, if any.
+-- help"all": Prints available topics.
+-- help(topic,false): Removes topic from "all"
+-- help(arg1,"newhelp"): Redefines what you will get from `help(arg1)`
+-- help(arg1,0), help(arg1,nil) (or any second argument except `false` 
+--     or a string): don't print help, return it as a string instead 
    if select('#',...)>1 then 
       print('Too many arguments: try `help(help)`'); return
    end

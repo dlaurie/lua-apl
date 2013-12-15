@@ -52,7 +52,7 @@ installed, and type `make` in the module directory. Copy `apl_core.so`,
 `package.path` will find it.
 
 On a non-Linux system, if you get it running, tell me how and and I will
-put the intructions in with due acknowledgment.
+put the instructions in with due acknowledgment.
 
 UTF-8 essentials
 ----------------
@@ -110,7 +110,7 @@ This is optional: you can do everything almost as easily without it.
 
     MYCFLAGS=-DLUA_PROMPT='"   "' -DLUA_PROMPT2='""'
 
-    so that my session will looks like an APL session instead of a Lua
+    so that my session will look like an APL session instead of a Lua
     session.
 3. Copy the supplied `lua-apl.c` to replace `src/lua.c`
 4. While inside `src`, do `make linux` or `make mingw` or whatever is 
@@ -159,8 +159,8 @@ The last few lines show how to get interactive help.
     0 0 0 0 0 0 0 0 0 1
        return apl"(n,n)⍴(n+1)↑1"()
     -- The above is what the previous line looks like on replay on
-    -- systems with readline history. That's all that the interactive
-    -- interpreter does.
+    -- systems with readline history. Changing your input to that is
+    -- in fact all that the interactive interpreter does.
 
        f=apl"(n,n)⍴(n+1)↑1" -- the same code as a function definition
        n=3                  -- redefining the global variable
@@ -169,9 +169,9 @@ The last few lines show how to get interactive help.
     0 1 0
     0 0 1
        g=apl"(⍵,⍵)⍴(⍵+1)↑1" -- replacing the global variable by an argument
-        =g(5)                -- executing it
+        =g(5)                -- executing it, with an unnecessary space
     stdin:1: unexpected symbol near '='
-       =g(5)                -- executing it
+       =g(5)                -- executing it, without that space
     1 0 0 0 0
     0 1 0 0 0
     0 0 1 0 0

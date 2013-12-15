@@ -93,7 +93,7 @@
 <li>Lua⋆APL is a Lua package. All of Lua is available. The implications are not individually listed; they include that scalars can be any Lua value except a table, Lua functions can be used to index an array, arrays can be modified at the Lua level, some string-valued keys are used, etc.</li>
 <li>Lua⋆APL can be extended by Lua functions registered under APL names. This could be used to provided some non-implemented functionality.</li>
 <li>Namespaces.</li>
-<li><code>∇</code> and <code>⎕</code> are ordinary APL functions.</li>
+<li><code>∇</code> is a function acting on a string or function and returning a function.</li>
 <li>Lua⋆APL supports strings, not character arrays.</li>
 </ol>
 <hr />
@@ -105,7 +105,7 @@
 <h3 id="gettblab"><code>get(tbl,a,b)</code></h3>
 <p>Returns <code>tbl[a:b]</code>. This function may cause stack overflow if too many items are requested.</p>
 <h3 id="movetblabcd"><code>move(tbl,a,b,c[,d])</code></h3>
-<p>Moves <code>tbl[a,b]</code> to <code>tbl[c,d]</code>, overwriting whatever was there. If <code>d</code> is omitted, it is calculated so that <code>b-a=d-c</code>. Returns <code>tbl</code>.</p>
+<p>Moves <code>tbl[a,b]</code> to <code>tbl[c,d]</code>, overwriting whatever was there. If omitted, <code>d</code> is calculated so that <code>b-a == d-c</code>. Returns <code>tbl</code>.</p>
 <h3 id="picktblabfctcount"><code>pick(tbl,a,b,fct[,count])</code></h3>
 <p>If <code>count==1</code>, returns the first index <code>i</code> in <code>a:b</code> such that <code>fct(tbl[i])</code> is true. If <code>count&gt;1</code>, ignores the first <code>count-1</code> hits. If <code>fct</code> is not a function or if <code>count&lt;1,</code> returns nil.</p>
 <h3 id="settblab..."><code>set(tbl,a,b,...)</code></h3>
@@ -114,10 +114,6 @@
 <h3 id="transposetblabtarget"><code>transpose(tbl,a,b,target)</code></h3>
 <p>Stores the transpose of <code>tbl[1:a*b]</code> in <code>target[1:a*b]</code>. <code>tbl</code> is assumed to contain <code>a</code> blocks of <code>b</code> elements, and <code>target</code> will contain <code>b</code> blocks of <code>a</code> elements. Returns <code>target</code>.</p>
 <p><code>tbl</code> and <code>target</code> are not allowed to be the same array.</p>
-<h3 id="sorttblabcmp"><code>sort(tbl,a,b[,cmp])</code></h3>
-<p>Sorts <code>tbl[a:b]</code> by insertion.</p>
-<h3 id="mergetbllowmiddlehighcmp"><code>merge(tbl,low,middle,high[,cmp])</code></h3>
-<p>Merges <code>tbl[low:middle]</code> with <code>tbl[middle+1:high'</code> according to <code>cmp</code> (specified as for the standard <code>table.sort</code>). Both halves are assumed to be already sorted.</p>
 <h2 id="apl-functions">APL functions</h2>
 <p>These functions operate on or return tables that conform to the specifications for APL arrays. See main documentation.</p>
 <h3 id="bothfx1x2e1e2"><code>both(f,x1,x2,e1,e2)</code></h3>

@@ -741,6 +741,7 @@ end
 
 Deal = function(_w,_a)
    local n=_w
+   checktype(_w,"number",'⍵','Deal')
    argcheck(_a<=n,'pair',"can't deal ".._a.." from "..n)
    local p=iota(n)
    for k=0,n-1 do 
@@ -799,7 +800,7 @@ Each = function(f,ex1,ex2)
    if ex1==nil then ex1=1 end
    if ex2==nil then ex2=1 end
    return function(_w,_a) 
-      if #_w==0 or #_a==0 then return arr{} end
+      if #_w==0 or _a and #_a==0 then return arr{} end
       if _a then return both(f,_w,_a,ex1,ex2)
       else return each(f,_w) 
       end 
@@ -1495,6 +1496,7 @@ unit = {[apl.Add]=0, [apl.Mul]=1, [apl.And]=1, [apl.Or]=0,
 if _APL_LEVEL==2 then arr_meta.__tostring = apl.Format
    else arr_meta.__tostring = apl.ToString
 end
+local min=math.min
 arr_meta.__lt = function(x,y)  -- lexicographic comparison
    if is_not"table"(y) then y={y} end
    for i=1,min(#x,#y) do 

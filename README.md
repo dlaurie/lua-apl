@@ -7,7 +7,7 @@ Lua⋆APL is Lua powered by APL. (That's an APL pun.) If the symbol between Lua 
 
 The module table contains mostly Lua functions mapped to APL names, by and large doing what the corresponding APL functions would do, but operating on Lua numbers, strings, tables and functions.
 
-The present version checks that its host Lua satisfies `_VERSION=="Lua 5.2"`.
+A version which checks that its host Lua satisfies `_VERSION=="Lua 5.2"` has been frozen but is available as a branch on GitHub. Future development will rely Lua 5.3.
 
 Package contents
 ----------------
@@ -79,7 +79,7 @@ Installing the APL interpreter
 
 This is optional: you can do everything almost as easily without it.
 
-1.  Copy the `src` sundirectory of the 5.2.2 Lua source to your module directory.
+1.  Copy the `src` subdirectory of the 5.2.2 Lua source to your module directory.
 2.  Optionally, customize `src/Makefile`. For example, I like to put
 
     MYCFLAGS=-DLUA\_PROMPT='" "' -DLUA\_PROMPT2='""'

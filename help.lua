@@ -6,7 +6,11 @@
 -- $ lua -e "help = require'ihelp'"
 -- help()
 
-do
+do 
+local       getinfo,    open,       insert,       concat,       sort =
+      debug.getinfo, io.open, table.insert, table.concat, table.sort 
+local pairs, select, type, utf8len = pairs, select, type, utf8 and utf8.len
+
 -- sample shorthelp and longhelp
 local shorthelp = [[
 
@@ -90,25 +94,25 @@ local docstring = function(fct)
             local k=start-1  -- first try the preceding comment block
             while fcode[k]:match(starts_with_two_hyphens) do 
                if fcode[k]:match(only_hyphens_at_least_three) then break end
-               table.insert(helptext,1,fcode[k]) 
+               insert(helptext,1,fcode[k]) 
                if fcode[k]:match(starts_with_three_hyphens) then break end
                k=k-1
                if k==0 then break end
             end
-            if #helptext>0 then helptext=table.concat(helptext,'\n')
+            if #helptext>0 then helptext=concat(helptext,'\n')
             else  -- try function body
                for k=start,stop do
                   helptext[#helptext+1] = fcode[k]
                end
                fcode = helptext
                if #helptext>0 then 
-                  helptext=table.concat(helptext,'\n')
+                  helptext=concat(helptext,'\n')
                   helptext = helptext and helptext:match(docstring_pattern)
                else helptext=nil
                end 
                -- last resort: full code if it is short enough
                if not helptext and (#fcode<=shortenough) then 
-                  helptext=table.concat(fcode,'\n') 
+                  helptext=concat(fcode,'\n') 
                end
             end
          end
@@ -118,7 +122,8 @@ local docstring = function(fct)
 end
 
 -- assumes validity of UTF8 encoding
-local function utflen(s) return #s:gsub("[\192-\239][\128-\191]*",'.') end
+local utflen = utf8len or 
+   function (s) return #s:gsub("[\192-\239][\128-\191]*",'.') end
 
 local fold
 fold = function(s)
@@ -134,8 +139,8 @@ local topics = function (tbl,prefix)
    for k in pairs(tbl) do if type(k)=='string' then 
       t[#t+1]=(prefix or '')..k
    end end  
-   table.sort(t)
-   return table.concat(t,' ')
+   sort(t)
+   return concat(t,' ')
 end
 
 local help = function(fct,...)
@@ -168,6 +173,7 @@ local help = function(fct,...)
    elseif longhelp[fct] then helptext=longhelp[fct]
    elseif type(fct)=="table" then 
       if type(fct.help)=='string' then helptext=fct.help
+      elseif type(fct.help)=='function' then helptext=fct.help(fct)
       else helptext=fold("Contents: "..topics(fct))
       end
    elseif type(fct)=='function' then helptext=docstring(fct) or nohelp

@@ -7,7 +7,9 @@ Lua⋆APL is Lua powered by APL. (That's an APL pun.) If the symbol between Lua 
 
 The module table contains mostly Lua functions mapped to APL names, by and large doing what the corresponding APL functions would do, but operating on Lua numbers, strings, tables and functions.
 
-A version which checks that its host Lua satisfies `_VERSION=="Lua 5.2"` has been frozen but is available as a branch on GitHub. Future development will rely Lua 5.3.
+A version which checks that its host Lua satisfies `_VERSION=="Lua 5.2"` has been frozen but is available as a branch on GitHub. Future development will rely on Lua 5.3.
+
+March 2015: GNU APL is now mature enough to allow the writing of a Lua interface to it. See <https://github.com/dlaurie/lua-gnuapl>. Future versions of Lua⋆APL will aspire to be compatible with GNU APL.
 
 Package contents
 ----------------
